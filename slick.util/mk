@@ -1,0 +1,1 @@
+javac -classpath /home/pi/lwjgl/libs/lwjgl.jar:/home/pi/lwjgl/libs/lwjgl_test.jar:/home/pi/lwjgl/libs/lwjgl_util.jar:lib/ibxm.jar:lib/jogg-0.0.7.jar:lib/jorbis-0.0.15.jar src/org/newdawn/slick/**/*.java src/org/newdawn/slick/*.java
