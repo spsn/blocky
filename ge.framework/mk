@@ -1,1 +1,0 @@
-javac -classpath /home/pi/lwjgl/libs/lwjgl.jar:/home/pi/lwjgl/libs/lwjgl_test.jar:/home/pi/lwjgl/libs/lwjgl_util.jar:/home/pi/gef/slick.util/src src/ge/framework/**/*.java
