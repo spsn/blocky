@@ -1,0 +1,5 @@
+Blocky is a journey that my 10 yr son and I have taken together where he can learn to program in JAVA and I can learn about 3D graphics.
+
+The code in this repository uses OpenGL ES 2.0 and serves as a demonstration that it is possible to build a sandbox game like Minecraft that is able to run on the Raspberry Pi SBC.
+
+Please join in and help us grow Blocky and make it better.
