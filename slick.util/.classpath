@@ -5,7 +5,14 @@
 	<classpathentry kind="lib" path="lib/ibxm.jar"/>
 	<classpathentry kind="lib" path="lib/jogg-0.0.7.jar"/>
 	<classpathentry kind="lib" path="lib/jorbis-0.0.15.jar"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/lwjgles"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/lwjgl-2.8.4"/>
+	<classpathentry kind="lib" path="/lwjgl-2.8.4/jar/AppleJavaExtensions.jar"/>
+	<classpathentry kind="lib" path="/lwjgl-2.8.4/jar/asm-debug-all.jar"/>
+	<classpathentry kind="lib" path="/lwjgl-2.8.4/jar/jinput.jar"/>
+	<classpathentry kind="lib" path="/lwjgl-2.8.4/jar/lwjgles_test.jar"/>
+	<classpathentry kind="lib" path="/lwjgl-2.8.4/jar/lwjgles_util_applet.jar"/>
+	<classpathentry kind="lib" path="/lwjgl-2.8.4/jar/lwjgles_util.jar"/>
+	<classpathentry kind="lib" path="/lwjgl-2.8.4/jar/lwjgles.jar"/>
+	<classpathentry kind="lib" path="/lwjgl-2.8.4/jar/lzma.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

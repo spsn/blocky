@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/lwjgles"/>
+	<classpathentry kind="lib" path="jar/AppleJavaExtensions.jar"/>
+	<classpathentry kind="lib" path="jar/asm-debug-all.jar"/>
+	<classpathentry kind="lib" path="jar/jinput.jar"/>
+	<classpathentry kind="lib" path="jar/lwjgles_test.jar"/>
+	<classpathentry kind="lib" path="jar/lwjgles_util_applet.jar"/>
+	<classpathentry kind="lib" path="jar/lwjgles_util.jar"/>
+	<classpathentry kind="lib" path="jar/lwjgles.jar"/>
+	<classpathentry kind="lib" path="jar/lzma.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
