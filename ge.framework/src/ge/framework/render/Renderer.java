@@ -21,6 +21,9 @@ public abstract class Renderer
 	// Opaque mesh list
 	protected java.util.List<Mesh> opaqueMeshList;
 
+	// Model mesh list
+	protected java.util.List<Mesh> modelMeshList;
+
 	// Transparent mesh list
 	protected java.util.List<Mesh> transparentMeshList;
 
@@ -44,6 +47,9 @@ public abstract class Renderer
 
 		// Create opaque mesh list
 		opaqueMeshList = new java.util.ArrayList<Mesh>();
+
+		// Create model mesh list
+		modelMeshList = new java.util.ArrayList<Mesh>();
 
 		// Create transparent mesh list
 		transparentMeshList = new java.util.ArrayList<Mesh>();
@@ -112,6 +118,12 @@ public abstract class Renderer
 			// Add mesh to opaque mesh list
 			opaqueMeshList.add(mesh);
 		}
+		// Mesh is model mesh?
+		else if (mesh.getMeshType() == Mesh.MeshType.MODEL)
+		{
+			// Add mesh to model mesh list
+			modelMeshList.add(mesh);
+		}
 		// Mesh is transparent mesh?
 		else if (mesh.getMeshType() == Mesh.MeshType.TRANSPARENT)
 		{
@@ -142,6 +154,12 @@ public abstract class Renderer
 		{
 			// Remove mesh from opaque mesh list
 			opaqueMeshList.remove(mesh);
+		}
+		// Mesh is model mesh?
+		else if (mesh.getMeshType() == Mesh.MeshType.MODEL)
+		{
+			// Remove mesh from model mesh list
+			modelMeshList.remove(mesh);
 		}
 		// Mesh is transparent mesh?
 		else if (mesh.getMeshType() == Mesh.MeshType.TRANSPARENT)

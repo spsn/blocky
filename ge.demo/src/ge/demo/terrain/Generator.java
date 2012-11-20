@@ -1,6 +1,7 @@
 package ge.demo.terrain;
 import org.lwjgl.util.vector.Vector3f;
 
+import ge.demo.game.Settings;
 import ge.demo.shape.Shape;
 import ge.framework.buffer.FloatBuffer;
 import ge.framework.buffer.ShortBuffer;
@@ -88,6 +89,7 @@ public class Generator
 	}
 
 	public void generateTerrain(
+		final Settings settings,
 		final Renderer renderer,
 		final ProgressBarOverlay s2)
 	{
@@ -106,8 +108,25 @@ public class Generator
 
 			for (int z = 0; z < zs; z++)
 			{
-				height = (int) (Noise.noise((float) Math.sin(Math.toRadians((ct + x + x + x) % 360)), (float) Math.cos(Math.toRadians((ct + z) % 360)), (float) 0) * 50)
-				+ (int)((128 / 5) * 0.9) + 32;
+
+				// Ponds terrain
+				if (settings.getTerrainType() == 1)
+				{
+					height = (int) (Noise.noise((float) (Math.toRadians((ct + x) % 360)), (float) (Math.toRadians((ct + z) % 360)), (float) 0) * 50)
+						+ (int)((128 / 5) * 0.9) + 32;
+				}
+				// Flat terrain
+				else if (settings.getTerrainType() == 2)
+				{
+					height = (int) (Noise.noise(64, 64, (float) 0) * 50)
+						+ (int)((128 / 5) * 0.9) + 32;
+				}
+				// Hills terrain
+				else
+				{
+					height = (int) (Noise.noise((float) Math.sin(Math.toRadians((ct + x + x + x) % 360)), (float) Math.cos(Math.toRadians((ct + z) % 360)), (float) 0) * 50)
+						+ (int)((128 / 5) * 0.9) + 32;
+				}
 
 				for (int y = 0; y < height; y++)
 				{
@@ -233,217 +252,44 @@ public class Generator
 		s2.setValue((++count * 100) / total, 100);
 		renderer.renderOverlays();
 
-		// Tree
-		for (int i = 0; i < 100f * factor; i++)
+		if (settings.getVegetationMode() == 0)
 		{
-			int x = (int)(Math.random() * (xs - 10)) + 5;
-			int z = (int)(Math.random() * (zs - 10)) + 5;
-			
-			for (int y = 1; y < ys; y++)
+
+			// Tree
+			for (int i = 0; i < 100f * factor; i++)
 			{
-
-				if (space[x][y][z] == 0)
+				int x = (int)(Math.random() * (xs - 10)) + 5;
+				int z = (int)(Math.random() * (zs - 10)) + 5;
+				
+				for (int y = 1; y < ys; y++)
 				{
-					block = space[x][y - 1][z];
 
-					if ((block == 6) || (block == 15) || (block == 3) || (block == 26))
+					if (space[x][y][z] == 0)
 					{
-						break;
-					}
+						block = space[x][y - 1][z];
 
-					int h = (int)(Math.random() * 3) + 4;
-
-					if ((y + h) < (ys - 10))
-					{
-
-						for (int j = 0; j < h; j++)
+						if ((block == 6) || (block == 15) || (block == 3) || (block == 26))
 						{
-							space[x][y + j][z] = 7;
-							
-							addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)9);
+							break;
 						}
 
-					}
+						int h = (int)(Math.random() * 3) + 4;
 
-					break;
-				}
-
-			}
-
-		}
-
-		//TODO
-		s2.setValue((++count * 100) / total, 100);
-		renderer.renderOverlays();
-
-		// Birch tree
-		for (int i = 0; i < 50f * factor; i++)
-		{
-			int x = (int)(Math.random() * (xs - 10)) + 5;
-			int z = (int)(Math.random() * (zs - 10)) + 5;
-			
-			for (int y = 1; y < ys; y++)
-			{
-
-				if (space[x][y][z] == 0)
-				{
-					block = space[x][y - 1][z];
-
-					if ((block == 6) || (block == 15) || (block == 3) || (block == 26))
-					{
-						break;
-					}
-
-					int h = (int)(Math.random() * 3) + 4;
-
-					if ((y + h) < (ys - 10))
-					{
-
-						for (int j = 0; j < h; j++)
+						if ((y + h) < (ys - 10))
 						{
-							space[x][y + j][z] = 7;
-							
-							addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)9);
-						}
 
-					}
-
-					break;
-				}
-
-			}
-
-		}
-
-		//TODO
-		s2.setValue((++count * 100) / total, 100);
-		renderer.renderOverlays();
-
-		// ETree
-		for (int i = 0; i < 0f * factor; i++)
-		{
-			int x = (int)(Math.random() * (xs - 10)) + 5;
-			int z = (int)(Math.random() * (zs - 10)) + 5;
-			
-			for (int y = 1; y < ys; y++)
-			{
-
-				if (space[x][y][z] == 0)
-				{
-
-					if ((space[x][y - 1][z] == 6) || (space[x][y - 1][z] == 26))
-					{
-						break;
-					}
-
-					int h = (int)(Math.random() * 3) + 4;
-
-					if ((y + h) < (ys - 10))
-					{
-
-						for (int j = 0; j < h; j++)
-						{
-							space[x][y + j][z] = 16;
-						
-							addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)17);
-						}
-
-					}
-
-					break;
-				}
-
-			}
-
-		}
-
-		//TODO
-		s2.setValue((++count * 100) / total, 100);
-		renderer.renderOverlays();
-
-		// GoldenOak
-		for (int i = 0; i < 50f * factor; i++)
-		{
-			int x = (int)(Math.random() * (xs - 10)) + 5;
-			int z = (int)(Math.random() * (zs - 10)) + 5;
-			
-			for (int y = 1; y < ys; y++)
-			{
-
-				if (space[x][y][z] == 0)
-				{
-					block = space[x][y - 1][z];
-
-					if ((block == 6) || (block == 15) || (block == 3) || (block == 26))
-					{
-						break;
-					}
-
-					int h = (int)(Math.random() * 3) + 4;
-
-					if ((y + h) < (ys - 10))
-					{
-
-						for (int j = 0; j < h; j++)
-						{
-							space[x][y + j][z] = 10;
-
-							addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)11);
-						}
-
-					}
-
-					break;
-				}
-
-			}
-
-		}
-
-		//TODO
-		s2.setValue((++count * 100) / total, 100);
-		renderer.renderOverlays();
-
-		// Tall tree
-		for (int i = 0; i < 25f * factor; i++)
-		{
-			int x = (int)(Math.random() * (xs - 10)) + 5;
-			int z = (int)(Math.random() * (zs - 10)) + 5;
-			
-			for (int y = 1; y < ys; y++)
-			{
-
-				if (space[x][y][z] == 0)
-				{
-					block = space[x][y - 1][z];
-
-					if ((block == 6) || (block == 15) || (block == 3) || (block == 26))
-					{
-						break;
-					}
-
-					int h = (int)(Math.random() * 5) + 10; //TODO
-
-					if ((y + h) < (ys - 10))
-					{
-
-						for (int j = 0; j < h; j++)
-						{
-							space[x][y + j][z] = 18;
-							space[x + 1][y + j][z] = 18;
-							space[x][y + j][z + 1] = 18;
-							space[x + 1][y + j][z + 1] = 18;
-						
-							if (j > (h - 10))
+							for (int j = 0; j < h; j++)
 							{
-								addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))) * 2, (byte)9);
+								space[x][y + j][z] = 7;
+								
+								addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)9);
 							}
 
 						}
 
+						break;
 					}
 
-					break;
 				}
 
 			}
@@ -454,36 +300,239 @@ public class Generator
 		s2.setValue((++count * 100) / total, 100);
 		renderer.renderOverlays();
 
-		// Virtual Tree
-		for (int i = 0; i < 10f * factor; i++)
+		if (settings.getVegetationMode() == 0)
 		{
-			int x = (int)(Math.random() * (xs - 10)) + 5;
-			int z = (int)(Math.random() * (zs - 10)) + 5;
-			
-			for (int y = 1; y < ys; y++)
-			{
 
-				if (space[x][y][z] == 0)
+			// Birch tree
+			for (int i = 0; i < 50f * factor; i++)
+			{
+				int x = (int)(Math.random() * (xs - 10)) + 5;
+				int z = (int)(Math.random() * (zs - 10)) + 5;
+				
+				for (int y = 1; y < ys; y++)
 				{
 
-					if ((space[x][y - 1][z] == 6) || (space[x][y - 1][z] == 15) || (space[x][y - 1][z] == 3) || (space[x][y - 1][z] == 26))
+					if (space[x][y][z] == 0)
 					{
+						block = space[x][y - 1][z];
+
+						if ((block == 6) || (block == 15) || (block == 3) || (block == 26))
+						{
+							break;
+						}
+
+						int h = (int)(Math.random() * 3) + 4;
+
+						if ((y + h) < (ys - 10))
+						{
+
+							for (int j = 0; j < h; j++)
+							{
+								space[x][y + j][z] = 7;
+								
+								addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)9);
+							}
+
+						}
+
 						break;
 					}
 
-					int h = (int)(Math.random() * 3) + 4;
-
-					for (int j = 0; j < h; j++)
-					{
-						space[x][y + j][z] = 24;
-						
-						addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)25);
-					}
-
-					break;
 				}
 
 			}
+
+		}
+
+		//TODO
+		s2.setValue((++count * 100) / total, 100);
+		renderer.renderOverlays();
+
+		if (settings.getVegetationMode() == 0)
+		{
+
+			// ETree
+			for (int i = 0; i < 0f * factor; i++)
+			{
+				int x = (int)(Math.random() * (xs - 10)) + 5;
+				int z = (int)(Math.random() * (zs - 10)) + 5;
+				
+				for (int y = 1; y < ys; y++)
+				{
+
+					if (space[x][y][z] == 0)
+					{
+
+						if ((space[x][y - 1][z] == 6) || (space[x][y - 1][z] == 26))
+						{
+							break;
+						}
+
+						int h = (int)(Math.random() * 3) + 4;
+
+						if ((y + h) < (ys - 10))
+						{
+
+							for (int j = 0; j < h; j++)
+							{
+								space[x][y + j][z] = 16;
+							
+								addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)17);
+							}
+
+						}
+
+						break;
+					}
+
+				}
+
+			}
+
+		}
+
+		//TODO
+		s2.setValue((++count * 100) / total, 100);
+		renderer.renderOverlays();
+
+		if (settings.getVegetationMode() == 0)
+		{
+
+			// GoldenOak
+			for (int i = 0; i < 50f * factor; i++)
+			{
+				int x = (int)(Math.random() * (xs - 10)) + 5;
+				int z = (int)(Math.random() * (zs - 10)) + 5;
+				
+				for (int y = 1; y < ys; y++)
+				{
+
+					if (space[x][y][z] == 0)
+					{
+						block = space[x][y - 1][z];
+
+						if ((block == 6) || (block == 15) || (block == 3) || (block == 26))
+						{
+							break;
+						}
+
+						int h = (int)(Math.random() * 3) + 4;
+
+						if ((y + h) < (ys - 10))
+						{
+
+							for (int j = 0; j < h; j++)
+							{
+								space[x][y + j][z] = 10;
+
+								addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)11);
+							}
+
+						}
+
+						break;
+					}
+
+				}
+
+			}
+
+		}
+
+		//TODO
+		s2.setValue((++count * 100) / total, 100);
+		renderer.renderOverlays();
+
+		if (settings.getVegetationMode() == 0)
+		{
+
+			// Tall tree
+			for (int i = 0; i < 25f * factor; i++)
+			{
+				int x = (int)(Math.random() * (xs - 10)) + 5;
+				int z = (int)(Math.random() * (zs - 10)) + 5;
+				
+				for (int y = 1; y < ys; y++)
+				{
+
+					if (space[x][y][z] == 0)
+					{
+						block = space[x][y - 1][z];
+
+						if ((block == 6) || (block == 15) || (block == 3) || (block == 26))
+						{
+							break;
+						}
+
+						int h = (int)(Math.random() * 5) + 10; //TODO
+
+						if ((y + h) < (ys - 10))
+						{
+
+							for (int j = 0; j < h; j++)
+							{
+								space[x][y + j][z] = 18;
+								space[x + 1][y + j][z] = 18;
+								space[x][y + j][z + 1] = 18;
+								space[x + 1][y + j][z + 1] = 18;
+							
+								if (j > (h - 10))
+								{
+									addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))) * 2, (byte)9);
+								}
+
+							}
+
+						}
+
+						break;
+					}
+
+				}
+
+			}
+
+		}
+
+		//TODO
+		s2.setValue((++count * 100) / total, 100);
+		renderer.renderOverlays();
+
+		if (settings.getVegetationMode() == 0)
+		{
+
+//			// Virtual Tree
+//			for (int i = 0; i < 10f * factor; i++)
+//			{
+//				int x = (int)(Math.random() * (xs - 10)) + 5;
+//				int z = (int)(Math.random() * (zs - 10)) + 5;
+//				
+//				for (int y = 1; y < ys; y++)
+//				{
+//
+//					if (space[x][y][z] == 0)
+//					{
+//
+//						if ((space[x][y - 1][z] == 6) || (space[x][y - 1][z] == 15) || (space[x][y - 1][z] == 3) || (space[x][y - 1][z] == 26))
+//						{
+//							break;
+//						}
+//
+//						int h = (int)(Math.random() * 3) + 4;
+//
+//						for (int j = 0; j < h; j++)
+//						{
+//							space[x][y + j][z] = 24;
+//							
+//							addLeaves(x, y + j + 2, z, (int)(4 - (2 * (j / (h * 1f)))), (byte)25);
+//						}
+//
+//						break;
+//					}
+//
+//				}
+//
+//			}
 
 		}
 
@@ -538,21 +587,26 @@ public class Generator
 		s2.setValue((++count * 100) / total, 100);
 		renderer.renderOverlays();
 
-		// Chests
-		for (int i = 0; i < 50f * factor; i++)
+		if (settings.getVegetationMode() == 0)
 		{
-			int x = (int)(Math.random() * xs);
-			int z = (int)(Math.random() * zs);
-			
-			for (int y = 1; y < ys; y++)
+
+			// Chests
+			for (int i = 0; i < 50f * factor; i++)
 			{
-				block = space[x][y][z];
-
-				if ((block == 0) || (block == 6) || (block == 26))
+				int x = (int)(Math.random() * xs);
+				int z = (int)(Math.random() * zs);
+				
+				for (int y = 1; y < ys; y++)
 				{
-					space[x][y][z] = 8;					
+					block = space[x][y][z];
 
-					break;
+					if ((block == 0) || (block == 6) || (block == 26))
+					{
+						space[x][y][z] = 8;					
+
+						break;
+					}
+
 				}
 
 			}
@@ -563,20 +617,25 @@ public class Generator
 		s2.setValue((++count * 100) / total, 100);
 		renderer.renderOverlays();
 
-		// Tall Grass
-		for (int i = 0; i < 10000f * factor; i++)
+		if (settings.getVegetationMode() == 0)
 		{
-			int x = (int)(Math.random() * xs);
-			int z = (int)(Math.random() * zs);
-			
-			for (int y = 1; y < ys; y++)
+
+			// Tall Grass
+			for (int i = 0; i < 25000f * factor; i++)
 			{
-
-				if ((space[x][y][z] == 0) && (space[x][y - 1][z] == 1))
+				int x = (int)(Math.random() * xs);
+				int z = (int)(Math.random() * zs);
+				
+				for (int y = 1; y < ys; y++)
 				{
-					space[x][y][z] = 20;					
 
-					break;
+					if ((space[x][y][z] == 0) && (space[x][y - 1][z] == 1))
+					{
+						space[x][y][z] = 20;					
+
+						break;
+					}
+
 				}
 
 			}
@@ -587,20 +646,25 @@ public class Generator
 		s2.setValue((++count * 100) / total, 100);
 		renderer.renderOverlays();
 
-		// Flower
-		for (int i = 0; i < 250f * factor; i++)
+		if (settings.getVegetationMode() == 0)
 		{
-			int x = (int)(Math.random() * xs);
-			int z = (int)(Math.random() * zs);
-			
-			for (int y = 1; y < ys; y++)
+
+			// Flower
+			for (int i = 0; i < 250f * factor; i++)
 			{
-
-				if ((space[x][y][z] == 0) && (space[x][y - 1][z] == 1))
+				int x = (int)(Math.random() * xs);
+				int z = (int)(Math.random() * zs);
+				
+				for (int y = 1; y < ys; y++)
 				{
-					space[x][y][z] = 22;					
 
-					break;
+					if ((space[x][y][z] == 0) && (space[x][y - 1][z] == 1))
+					{
+						space[x][y][z] = 22;					
+
+						break;
+					}
+
 				}
 
 			}
@@ -611,20 +675,25 @@ public class Generator
 		s2.setValue((++count * 100) / total, 100);
 		renderer.renderOverlays();
 
-		// Rose
-		for (int i = 0; i < 250f * factor; i++)
+		if (settings.getVegetationMode() == 0)
 		{
-			int x = (int)(Math.random() * xs);
-			int z = (int)(Math.random() * zs);
-			
-			for (int y = 1; y < ys; y++)
+
+			// Rose
+			for (int i = 0; i < 250f * factor; i++)
 			{
-
-				if ((space[x][y][z] == 0) && (space[x][y - 1][z] == 1))
+				int x = (int)(Math.random() * xs);
+				int z = (int)(Math.random() * zs);
+				
+				for (int y = 1; y < ys; y++)
 				{
-					space[x][y][z] = 23;					
 
-					break;
+					if ((space[x][y][z] == 0) && (space[x][y - 1][z] == 1))
+					{
+						space[x][y][z] = 23;					
+
+						break;
+					}
+
 				}
 
 			}

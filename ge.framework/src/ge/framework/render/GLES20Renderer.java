@@ -27,6 +27,9 @@ public class GLES20Renderer extends Renderer
 	// Shader program for opaque meshes
 	private GLES20Program opaqueProgram;
 
+	// Shader program for model meshes
+	private GLES20Program modelProgram;
+
 	// Shader program for transparent meshes
 	private GLES20Program transparentProgram;
 
@@ -36,19 +39,19 @@ public class GLES20Renderer extends Renderer
 	// Index buffer
 	private java.nio.ShortBuffer sharedIndexBuffer;
 
-	//TODO
+	// Projection matrix
 	private Matrix4f projectionMatrix;
 
-	//TODO
+	// Model view matrix
 	private Matrix4f modelViewMatrix;
 
-	//TODO
+	// Orthogonal matrix
 	private Matrix4f orthogonalMatrix;
 
-	//TODO
+	// Model view projection matrix
 	private Matrix4f mvpMatrix;
 
-	//TODO
+	// Model view projection matrix buffer
 	private java.nio.FloatBuffer mvpMatrixBuffer;
 
 	// Profiler
@@ -56,6 +59,10 @@ public class GLES20Renderer extends Renderer
 
 	//TODO
 	private int visBatchCount;
+
+	//TODO
+	private int eventSwivel;
+	private boolean eventsReady;
 
 	/**
 	 * Constructor.
@@ -91,6 +98,13 @@ public class GLES20Renderer extends Renderer
 		final GLES20Program opaqueProgram)
 	{
 		this.opaqueProgram = opaqueProgram;
+	}
+
+	//TODO
+	public void setModelProgram(
+		final GLES20Program modelProgram)
+	{
+		this.modelProgram = modelProgram;
 	}
 
 	//TODO
@@ -309,14 +323,14 @@ public class GLES20Renderer extends Renderer
 		profiler.measure(Profiler.CALCULATE_FRUSTUM);
 
 		//TODO - per mesh / per list
-		// Bind texture
+		// Texture defined?
 		if (texture != null)
 		{
+			// Bind texture
 			texture.bind();
+			GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+			GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
 		}
-
-		GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
-		GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
 
 		//TODO
 		profiler.measure(Profiler.BIND_TEXTURE);
@@ -337,21 +351,53 @@ public class GLES20Renderer extends Renderer
 		GLES20.glUniformMatrix4(opaqueProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
 
 		// Set texture sampler in shader program
-		GLES20.glUniform1i(opaqueProgram.getSamplerUniform(), 0);
+		GLES20.glUniform1i(opaqueProgram.getFragmentSamplerUniform(), 0);
 
 		//TODO
 		profiler.measure(Profiler.SET_PROGRAM_VARIABLES);
 
 		// Render opaque meshes
 		renderMeshList(opaqueMeshList,
-			opaqueProgram.getPositionAttribute(), opaqueProgram.getNormalAttribute(),
-			opaqueProgram.getColorAttribute(), opaqueProgram.getTextureAttribute());
+			opaqueProgram.getModelPositionUniform(), opaqueProgram.getModelRotationUniform(),
+			opaqueProgram.getVertexPositionAttribute(), opaqueProgram.getVertexNormalAttribute(),
+			opaqueProgram.getVertexColorAttribute(), opaqueProgram.getVertexTextureAttribute());
 
 		// Deactivate shader program for opaque meshes
 		opaqueProgram.deactivate();
 
 		//TODO
 		profiler.measure(Profiler.DEACTIVATE_PROGRAM);
+
+		// Scene contains model meshes?
+		if (modelMeshList.size() > 0)
+		{
+			// Activate shader program for model meshes
+			modelProgram.activate();
+
+			//TODO
+			profiler.measure(Profiler.ACTIVATE_PROGRAM);
+
+			// Set model view projection matrix in shader program
+			GLES20.glUniformMatrix4(modelProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
+
+			// Set texture sampler in shader program
+			GLES20.glUniform1i(modelProgram.getFragmentSamplerUniform(), 0);
+
+			//TODO
+			profiler.measure(Profiler.SET_PROGRAM_VARIABLES);
+
+			// Render model meshes
+			renderMeshList(modelMeshList,
+				modelProgram.getModelPositionUniform(), modelProgram.getModelRotationUniform(),
+				modelProgram.getVertexPositionAttribute(), modelProgram.getVertexNormalAttribute(),
+				modelProgram.getVertexColorAttribute(), modelProgram.getVertexTextureAttribute());
+
+			// Deactivate shader program for model meshes
+			modelProgram.deactivate();
+
+			//TODO
+			profiler.measure(Profiler.DEACTIVATE_PROGRAM);
+		}
 
 		// Scene contains transparent meshes?
 		if ((transparentMeshList.size() > 0)
@@ -371,15 +417,16 @@ public class GLES20Renderer extends Renderer
 			GLES20.glUniformMatrix4(transparentProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
 
 			// Set texture sampler in shader program
-			GLES20.glUniform1i(transparentProgram.getSamplerUniform(), 0);
+			GLES20.glUniform1i(transparentProgram.getFragmentSamplerUniform(), 0);
 
 			//TODO
 			profiler.measure(Profiler.SET_PROGRAM_VARIABLES);
 
 			// Render transparent meshes
 			renderMeshList(transparentMeshList,
-				transparentProgram.getPositionAttribute(), transparentProgram.getNormalAttribute(),
-				transparentProgram.getColorAttribute(), transparentProgram.getTextureAttribute());
+				transparentProgram.getModelPositionUniform(), opaqueProgram.getModelRotationUniform(),
+				transparentProgram.getVertexPositionAttribute(), transparentProgram.getVertexNormalAttribute(),
+				transparentProgram.getVertexColorAttribute(), transparentProgram.getVertexTextureAttribute());
 
 			//TODO
 			if (overlayMeshList.size() > 0)
@@ -412,8 +459,9 @@ public class GLES20Renderer extends Renderer
 
 				// Render overlay meshes
 				renderMeshList(overlayMeshList,
-					transparentProgram.getPositionAttribute(), transparentProgram.getNormalAttribute(),
-					transparentProgram.getColorAttribute(), transparentProgram.getTextureAttribute());
+					transparentProgram.getModelPositionUniform(), opaqueProgram.getModelRotationUniform(),
+					transparentProgram.getVertexPositionAttribute(), transparentProgram.getVertexNormalAttribute(),
+					transparentProgram.getVertexColorAttribute(), transparentProgram.getVertexTextureAttribute());
 			}
 
 			// Deactivate shader program for transparent meshes
@@ -430,7 +478,20 @@ public class GLES20Renderer extends Renderer
 //		GL11.glFlush();
 //		GL11.glFinish();
 		Display.update(false);
-		Display.processMessages();
+
+		//TODO
+		if (eventSwivel == 0)
+		{
+			Display.processMessages();
+			eventsReady = true;
+		}
+		else
+		{
+			eventsReady = false;
+		}
+
+		//TODO
+		eventSwivel = (eventSwivel == 0) ? 0 : eventSwivel + 1;
 
 		//TODO
 		profiler.measure(Profiler.SWAP_BUFFERS);
@@ -514,15 +575,16 @@ public class GLES20Renderer extends Renderer
 		GLES20.glUniformMatrix4(transparentProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
 
 		// Set texture sampler in shader program
-		GLES20.glUniform1i(transparentProgram.getSamplerUniform(), 0);
+		GLES20.glUniform1i(transparentProgram.getFragmentSamplerUniform(), 0);
 
 		//TODO
 		profiler.measure(Profiler.SET_PROGRAM_VARIABLES);
 
 		// Render overlay meshes
 		renderMeshList(overlayMeshList,
-			transparentProgram.getPositionAttribute(), transparentProgram.getNormalAttribute(),
-			transparentProgram.getColorAttribute(), transparentProgram.getTextureAttribute());
+			transparentProgram.getModelPositionUniform(), opaqueProgram.getModelRotationUniform(),
+			transparentProgram.getVertexPositionAttribute(), transparentProgram.getVertexNormalAttribute(),
+			transparentProgram.getVertexColorAttribute(), transparentProgram.getVertexTextureAttribute());
 
 		// Deactivate shader program for transparent meshes
 		transparentProgram.deactivate();
@@ -546,24 +608,31 @@ public class GLES20Renderer extends Renderer
 	}
 
 	/**
+	 * TODO
 	 * Render mesh list.
 	 * @param meshList The mesh list
-	 * @param positionAttribute The 
-	 * @param normalAttribute The 
-	 * @param colorAttribute The 
-	 * @param textureAttribute The 
+	 * @param modelPositionUniform The model position uniform location
+	 * @param modelRotationUniform The model rotation uniform location
+	 * @param vertexPositionAttribute The vertex position attribute location
+	 * @param vertexNormalAttribute The vertex normal attribute location
+	 * @param vertexColorAttribute The vertex color attribute location
+	 * @param vertexTextureAttribute The vertex texture attribute location
 	 */
 	private void renderMeshList(
 		final java.util.List<Mesh> meshList,
-		final int positionAttribute,
-		final int normalAttribute,
-		final int colorAttribute,
-		final int textureAttribute)
+		final int modelPositionUniform,
+		final int modelRotationUniform,
+		final int vertexPositionAttribute,
+		final int vertexNormalAttribute,
+		final int vertexColorAttribute,
+		final int vertexTextureAttribute)
 	{
 		// Local variables
 		java.util.ListIterator<Mesh> iterator;
 		Mesh mesh;
-		boolean draw;
+		boolean render;
+		Vector3f position;
+		Vector3f rotation;
 
 		//TODO - get from mesh
 		int stride = 48; 
@@ -571,33 +640,6 @@ public class GLES20Renderer extends Renderer
 		int normalOffset = 12;
 		int colorOffset = 24;
 		int textureOffset = 40;
-
-//		// Render mesh list
-//		for (iterator = meshList.listIterator(); iterator.hasNext() == true;)
-//		{
-//			mesh = (Mesh) iterator.next();
-//
-//			//TODO
-//			draw = false;
-//
-//			if (mesh.getMeshType() == Mesh.MeshType.OVERLAY)
-//			{
-//				draw = true;
-//			}
-//			else
-//			{
-//
-//				if (frustum.boxInFrustum(mesh.getBoundingBox(), profiler) == true)
-//				{
-//					draw = true;
-//				}
-//
-//			}
-//
-//		}
-//
-//		//TODO
-//		profiler.measure(Profiler.BOX_IN_FRUSTUM);
 
 		// Render mesh list
 		for (iterator = meshList.listIterator(); iterator.hasNext() == true;)
@@ -607,41 +649,63 @@ public class GLES20Renderer extends Renderer
 			//TODO
 //			profiler.measure(Profiler.ITERATE_LOOP);
 
-			//TODO
-			draw = false;
+			// Default do not render mesh
+			render = false;
 
-			if (mesh.getMeshType() == Mesh.MeshType.OVERLAY)
+			// Mesh is overlay mesh?
+			if ((mesh.getMeshType() == Mesh.MeshType.OVERLAY) || (mesh.getMeshType() == Mesh.MeshType.MODEL))
 			{
-				draw = true;
+				// Render mesh
+				render = true;
 			}
 			else
 			{
 
+				// Bounding box within viewing frustum?
 				if (frustum.boxInFrustum(mesh.getBoundingBox(), profiler) == true)
 				{
-					draw = true;
+					// Render mesh
+					render = true;
 				}
 
 				//TODO
 //				profiler.measure(Profiler.BOX_IN_FRUSTUM);
 			}
 
-			// Bounding box within viewing frustum?
-			//TODO
-//			if ((mesh.getMeshType() == Mesh.MeshType.OVERLAY)
-//				|| (frustum.boxInFrustum(mesh.getBoundingBox()) == true))
-			if (draw == true)
+			// Render mesh ?
+			if (render == true)
 			{
 
-				//TODO
+				// Texture defined for mesh?
 				if (mesh.getTexture() != null)
 				{
+					// Bind texture
 					mesh.getTexture().bind();
 					GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
 					GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
 
 					//TODO
 //					profiler.measure(Profiler.BIND_TEXTURE);
+				}
+
+				//TODO - model position
+				if ((modelPositionUniform != -1) && (mesh.getPosition() != null))
+				{
+					//TODO
+					position = mesh.getPosition();
+
+					//TODO
+					GLES20.glUniform3f(modelPositionUniform, position.x, position.y, position.z);
+				}
+
+				//TODO - model rotation
+				if ((modelRotationUniform != -1) && (mesh.getRotation() != null))
+				{
+					//TODO
+					rotation = mesh.getRotation();
+
+					//TODO
+					GLES20.glUniform3f(modelRotationUniform, (float) Math.toRadians(rotation.x), (float) Math.toRadians(rotation.y), (float) Math.toRadians(rotation.z));
 				}
 
 				// Bind to vertex buffer
@@ -651,24 +715,24 @@ public class GLES20Renderer extends Renderer
 //				profiler.measure(Profiler.BIND_BUFFER);
 
 				// Set vertex attributes
-				if (positionAttribute != -1)
+				if (vertexPositionAttribute != -1)
 				{
-					GLES20.glVertexAttribPointer(positionAttribute, 3, GLES20.GL_FLOAT, false, stride, positionOffset);
+					GLES20.glVertexAttribPointer(vertexPositionAttribute, 3, GLES20.GL_FLOAT, false, stride, positionOffset);
 				}
 
-				if (normalAttribute != -1)
+				if (vertexNormalAttribute != -1)
 				{
-					GLES20.glVertexAttribPointer(normalAttribute, 3, GLES20.GL_FLOAT, false, stride, normalOffset);
+					GLES20.glVertexAttribPointer(vertexNormalAttribute, 3, GLES20.GL_FLOAT, false, stride, normalOffset);
 				}
 
-				if (colorAttribute != -1)
+				if (vertexColorAttribute != -1)
 				{
-					GLES20.glVertexAttribPointer(colorAttribute, 4, GLES20.GL_FLOAT, false, stride, colorOffset);
+					GLES20.glVertexAttribPointer(vertexColorAttribute, 4, GLES20.GL_FLOAT, false, stride, colorOffset);
 				}
 
-				if (textureAttribute != -1)
+				if (vertexTextureAttribute != -1)
 				{
-					GLES20.glVertexAttribPointer(textureAttribute, 2, GLES20.GL_FLOAT, false, stride, textureOffset);
+					GLES20.glVertexAttribPointer(vertexTextureAttribute, 2, GLES20.GL_FLOAT, false, stride, textureOffset);
 				}
 
 				//TODO
@@ -734,6 +798,12 @@ public class GLES20Renderer extends Renderer
 		//TODO - picking
 
 		return new Ray(rayPosition, rayDirection);
+	}
+
+	//TODO
+	public boolean eventsReady()
+	{
+		return eventsReady;
 	}
 
 }

@@ -1,4 +1,8 @@
 package ge.demo.game;
+import ge.demo.actor.Actor;
+import ge.demo.actor.FlyingBlock;
+import ge.demo.actor.MovingBlock;
+import ge.demo.actor.PlayBlock;
 import ge.demo.actor.Player;
 import ge.demo.shape.Cube;
 import ge.demo.shape.Deco;
@@ -7,7 +11,10 @@ import ge.demo.shape.Shape;
 import ge.demo.shape.Slate;
 import ge.demo.shape.SunkenCube;
 import ge.demo.terrain.Generator;
+import ge.framework.buffer.FloatBuffer;
+import ge.framework.buffer.ShortBuffer;
 import ge.framework.material.Material;
+import ge.framework.mesh.Mesh;
 import ge.framework.overlay.CounterOverlay;
 import ge.framework.overlay.ProgressBarOverlay;
 import ge.framework.overlay.SpriteOverlay;
@@ -17,6 +24,7 @@ import ge.framework.render.Counters;
 import ge.framework.render.GLES20Renderer;
 import ge.framework.shader.BasicProgram;
 import ge.framework.shader.GLES20Program;
+import ge.framework.shader.ModelProgram;
 import ge.framework.shader.NightFogProgram;
 import ge.framework.shader.RainFogProgram;
 import ge.framework.util.Color;
@@ -25,12 +33,31 @@ import org.lwjgl.Sys;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 import org.newdawn.slick.opengl.Texture;
 import org.newdawn.slick.opengl.TextureLoader;
 import org.newdawn.slick.util.ResourceLoader;
 
 public class Blocky
 {
+
+	//TODO
+	public class ActorThread extends java.lang.Thread
+	{
+		private Blocky implementation;
+
+		public ActorThread(
+			final Blocky implementation)
+		{
+			this.implementation = implementation;
+		}
+
+		public void run()
+		{
+			implementation.updateActors();
+		}
+
+	}
 
 	//TODO
 	public class UpdateThread extends java.lang.Thread
@@ -50,7 +77,11 @@ public class Blocky
 
 	}
 
-	private int xs = 128, ys = 128, zs = 128;
+	public final int DEFAULT_WORLD_SIZE = 128;
+
+	private Settings settings;
+
+	private int xs = DEFAULT_WORLD_SIZE, ys = 128, zs = DEFAULT_WORLD_SIZE;
 	private Camera camera;
 	private SpriteSelectOverlay materialOverlay;
 	private SpriteOverlay materialBorder;
@@ -60,6 +91,8 @@ public class Blocky
 
 	private Material[] materials;
 	private Shape[] blocks;
+
+	private java.io.RandomAccessFile worldFile;
 
 	private byte[][][] space;
 	private byte[][][] light;
@@ -80,36 +113,52 @@ public class Blocky
 
 	private byte handblock = 1;
 
+	private int environmenType;
 	private byte worldLight;
 
-	private int environmenType = 0;
+	private FloatBuffer vertexBuffer;
+	private ShortBuffer indexBuffer;
 
-	public void start(String[] argv)
+	private java.util.List<Vector4f> changedBlockList;
+	private java.util.List<Actor> actorList;
+
+	private int lastMdx, lastMdy;
+
+	public void start(
+		final String[] argv)
 	{
 		// Local variables
 		Color backgroundColor;
 		GLES20Program opaqueProgram;
+		GLES20Program modelProgram;
 		GLES20Program transparentProgram;
+		ActorThread actorThread;
 		UpdateThread updateThread;
 		long time;
 
 		try
 		{
+			// Get settings
+			settings = getSettings(argv);
+
+			// Set world size
+			xs = settings.getWorldSize();
+			zs = xs;
+
+			// Set environmenType
+			environmenType = settings.getEnvironmentType();
 
 			//TODO
-			if ((argv.length > 0) && (argv[0].length() > 0))
-			{
-				xs = Integer.parseInt(argv[0]);
-				zs = xs;
-			}
+			vertexBuffer = new FloatBuffer(16 * 16 * 16 * 6 * 4 * 12);
+			indexBuffer = new ShortBuffer(16 * 16 * 16 * 6 * 4);
+
+			changedBlockList = new java.util.LinkedList<Vector4f>();
+			actorList = new java.util.ArrayList<Actor>();
 
 			// Create camera
 			camera = new Camera();
 			camera.setFieldOfView(45.0f);
 			camera.setViewingDistance(xs);
-
-			// Set player starting position
-			camera.setPositionY(-pheight - 30);
 
 			// Create renderer
 			renderer = new GLES20Renderer();
@@ -121,18 +170,18 @@ public class Blocky
 			if (environmenType == 1)
 			{
 				// Create shader program for opaque meshes
-				opaqueProgram = new RainFogProgram();
-
-				// Create shader program for transparent meshes
-				transparentProgram = new RainFogProgram();
-			}
-			else if (environmenType == 2)
-			{
-				// Create shader program for opaque meshes
 				opaqueProgram = new NightFogProgram();
 
 				// Create shader program for transparent meshes
 				transparentProgram = new NightFogProgram();
+			}
+			else if (environmenType == 2)
+			{
+				// Create shader program for opaque meshes
+				opaqueProgram = new RainFogProgram();
+
+				// Create shader program for transparent meshes
+				transparentProgram = new RainFogProgram();
 			}
 			else
 			{
@@ -144,7 +193,11 @@ public class Blocky
 			}
 
 			//TODO
+			modelProgram = new ModelProgram();
+
+			//TODO
 			renderer.setOpaqueProgram(opaqueProgram);
+			renderer.setModelProgram(modelProgram);
 			renderer.setTransparentProgram(transparentProgram);
 
 			SpriteOverlay b = new SpriteOverlay(0.0f, 0.3f, 1.0f, 0.8f, getTexture("res/Blocky4.png"));
@@ -174,8 +227,7 @@ public class Blocky
 			// Load texture
 			//TODO
 			Texture texture;
-//			texture = getTexture("res/TP8.png");
-			texture = getTexture("res/terrain.png");
+			texture = getTexture(settings.getTextureFileName());
 			renderer.setTexture(texture);
 
 			s2.setValue(60, 100);
@@ -209,7 +261,7 @@ public class Blocky
 			renderer.removeMesh(o.getMesh());
 
 			//TODO
-			buildSpace(s2);
+			buildSpace(settings, s2);
 
 			//TODO
 			renderer.addMesh(materialOverlay.getMesh());
@@ -227,11 +279,11 @@ public class Blocky
 			//TODO
 			if (environmenType == 1)
 			{
-				backgroundColor = new Color(0.6f, 0.6f, 0.6f, 1.0f);
+				backgroundColor = new Color(0.0f, 0.0f, 0.01f, 1.0f);
 			}
 			else if (environmenType == 2)
 			{
-				backgroundColor = new Color(0.0f, 0.0f, 0.01f, 1.0f);
+				backgroundColor = new Color(0.6f, 0.6f, 0.6f, 1.0f);
 			}
 			else
 			{
@@ -242,6 +294,29 @@ public class Blocky
 
 			//TODO
 			player = new Player();
+
+			// Set player starting position
+			//TODO v
+			for (int y = (ys - 1); y >= 0; y--)
+			{
+				//TODO
+				byte block = space[xs / 2][y][zs / 2];
+
+				if ((block != 0) && (block != 6) && (block != 14))
+				{
+					// Set player starting position
+					camera.setPositionY(-pheight + ((ys / 2) - y) - 0.5f);
+
+					break;
+				}
+
+			}
+			//TODO ^
+
+			//TODO
+			actorThread = new ActorThread(this);
+			actorThread.setDaemon(true);
+			actorThread.start();
 
 			//TODO
 			updateThread = new UpdateThread(this);
@@ -287,11 +362,196 @@ public class Blocky
 
 		}
 
+		//TODO
+		try
+		{
+			saveChangedBlocks();
+			worldFile.close();
+		}
+		catch (java.lang.Exception exception)
+		{
+		}
+
 //		System.out.println();
 //		System.out.println("FPS                   = " + (fps * 1000f) / (System.currentTimeMillis() - time));
 		renderer.profiler.display();
 
 		System.exit(-1);
+	}
+
+	//TODO
+	//size=128-256 [16]
+	//mood=day|night|gloomy
+	//terrain=hills|ponds|flat,noveg
+	//block=place|move|fly
+	//file=???
+	private Settings getSettings(
+		final String[] argv) throws java.lang.Exception
+	{
+		// Local variables
+		Settings settings;
+		String[] components;
+		int worldSize;
+
+		// Default settings
+		settings = new Settings();
+		settings.setWorldSize(DEFAULT_WORLD_SIZE);
+		settings.setEnvironmentType(0);
+		settings.setTerrainType(0);
+		settings.setBlockMode(0);
+		settings.setWorldFileName("world.blocky");
+		settings.setTextureFileName("res/terrain.png");
+
+		// Read settings from command line
+		for (int i = 0; i < argv.length; i++)
+		{
+			components = argv[i].split("[=]");
+
+			if (components.length == 2)
+			{
+
+				if ("size".equalsIgnoreCase(components[0]) == true)
+				{
+
+					try
+					{
+						worldSize = Integer.parseInt(components[1]);
+
+						if ((worldSize % 16) != 0)
+						{
+							throw new java.lang.Exception("Must be multiple of 16.");
+						}
+
+					}
+					catch (java.lang.Exception exception)
+					{
+						throw new java.lang.Exception("Invalid world size specified.  Must be multiple of 16.");
+					}
+
+					settings.setWorldSize(worldSize);
+				}
+				else if ("mood".equalsIgnoreCase(components[0]) == true)
+				{
+
+					if ("day".equalsIgnoreCase(components[1]) == true)
+					{
+						settings.setEnvironmentType(0);
+					}
+					else if ("night".equalsIgnoreCase(components[1]) == true)
+					{
+						settings.setEnvironmentType(1);
+					}
+					else if ("gloomy".equalsIgnoreCase(components[1]) == true)
+					{
+						settings.setEnvironmentType(2);
+					}
+
+				}
+				else if ("terrain".equalsIgnoreCase(components[0]) == true)
+				{
+
+					if (components[1].startsWith("hills") == true)
+					{
+						settings.setTerrainType(0);
+					}
+					else if (components[1].startsWith("ponds") == true)
+					{
+						settings.setTerrainType(1);
+					}
+					else if (components[1].startsWith("flat") == true)
+					{
+						settings.setTerrainType(2);
+					}
+
+					if (components[1].endsWith("noveg") == true)
+					{
+						settings.setVegetationMode(1);
+					}
+
+				}
+				else if ("block".equalsIgnoreCase(components[0]) == true)
+				{
+
+					if ("place".equalsIgnoreCase(components[1]) == true)
+					{
+						settings.setBlockMode(0);
+					}
+					else if ("move".equalsIgnoreCase(components[1]) == true)
+					{
+						settings.setBlockMode(1);
+					}
+					else if ("fly".equalsIgnoreCase(components[1]) == true)
+					{
+						settings.setBlockMode(2);
+					}
+					else if ("play".equalsIgnoreCase(components[1]) == true)
+					{
+						settings.setBlockMode(3);
+					}
+
+				}
+				else if ("world".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setWorldFileName(components[1]);
+				}
+				else if ("texture".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setTextureFileName(components[1]);
+				}
+				else if ("xmov".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setXmov(Float.parseFloat(components[1]));
+				}
+				else if ("ymov".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setYmov(Float.parseFloat(components[1]));
+				}
+				else if ("zmov".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setZmov(Float.parseFloat(components[1]));
+				}
+				else if ("xrot".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setXrot(Float.parseFloat(components[1]));
+				}
+				else if ("yrot".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setYrot(Float.parseFloat(components[1]));
+				}
+				else if ("zrot".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setZrot(Float.parseFloat(components[1]));
+				}
+				else if ("xsin".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setXsin(Float.parseFloat(components[1]));
+				}
+				else if ("ysin".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setYsin(Float.parseFloat(components[1]));
+				}
+				else if ("zsin".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setZsin(Float.parseFloat(components[1]));
+				}
+				else if ("xamp".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setXamp(Float.parseFloat(components[1]));
+				}
+				else if ("yamp".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setYamp(Float.parseFloat(components[1]));
+				}
+				else if ("zamp".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setZamp(Float.parseFloat(components[1]));
+				}
+
+			}
+
+		}
+
+		return settings;
 	}
 
 	//TODO
@@ -389,7 +649,7 @@ public class Blocky
 	//TODO
 	public void createMaterials()
 	{
-		materials = new Material[34];
+		materials = new Material[38];
 		// Grass
 		materials[0] = new Material(16, 16, 0, 0);
 		// Grass+dirt
@@ -458,12 +718,20 @@ public class Blocky
 		materials[32] = new Material(16, 16, 2, 2);
 		// Torch
 		materials[33] = new Material(16, 16, 0, 5);
+		// Leaf
+		materials[34] = new Material(16, 16, 9, 3);
+		// Pumpkin front
+		materials[35] = new Material(16, 16, 7, 7);
+		// Pumpkin top
+		materials[36] = new Material(16, 16, 6, 6);
+		// Pumpkin sides
+		materials[37] = new Material(16, 16, 6, 7);
 	}
 
 	//TODO
 	public void createBlocks()
 	{
-		blocks = new Shape[31];
+		blocks = new Shape[33];
 		// Air
 		blocks[0] = null;
 		// Grass+dirt
@@ -526,29 +794,43 @@ public class Blocky
 		blocks[29] = new Cube(new Material[] {materials[32], materials[32], materials[32], materials[32], materials[32], materials[32]}); // Top, Bottom, Front, Back, Left, Right
 		// Torch
 		blocks[30] = new Deco(new Material[] {materials[33], materials[33], materials[33], materials[33], materials[33], materials[33]}); // Top, Bottom, Front, Back, Left, Right
+		// Leaf
+		blocks[31] = new Deco(new Material[] {materials[34], materials[34], materials[34], materials[34], materials[34], materials[34]}); // Top, Bottom, Front, Back, Left, Right
+		// Pumpkin
+		blocks[32] = new Cube(new Material[] {materials[36], materials[37], materials[35], materials[37], materials[37], materials[37]}); // Top, Bottom, Front, Back, Left, Right
 	}
 
 	//TODO
 	public void buildSpace(
+		final Settings settings,
 		final ProgressBarOverlay s2) throws java.lang.Exception
 	{
+		// Local variables
+		java.io.File file;
+
 		//TODO
-		space = new byte[xs][ys][zs];
-		light = new byte[xs][ys][zs];
-
-		generator = new Generator(xs, ys, zs, (float) Math.pow((xs / 128.0f), 2.0f) / 4.0f, space, light, blocks, counters);
-
 		SpriteOverlay o = new SpriteOverlay(0.05f, -0.17f, 0.25f, 0.125f, getTexture("res/b.png"));
 		renderer.addMesh(o.getMesh());
 
-		generator.generateTerrain(renderer, s2);
+		//TODO - load or generate
+		file = new java.io.File(settings.getWorldFileName());
 
-		try
+		if (file.exists() == true)
 		{
-			Thread.sleep(250);
+			loadWorld(file, s2);
+
+			generator = new Generator(xs, ys, zs, (float) Math.pow((xs / 128.0f), 2.0f) / 4.0f, space, light, blocks, counters);
 		}
-		catch (java.lang.Exception exception)
+		else
 		{
+			space = new byte[xs][ys][zs];
+			light = new byte[xs][ys][zs];
+
+			generator = new Generator(xs, ys, zs, (float) Math.pow((xs / 128.0f), 2.0f) / 4.0f, space, light, blocks, counters);
+
+			generator.generateTerrain(settings, renderer, s2);
+
+			saveWorld(file, s2);
 		}
 
 		renderer.removeMesh(o.getMesh());
@@ -556,7 +838,7 @@ public class Blocky
 		o = new SpriteOverlay(0.05f, -0.17f, 0.25f, 0.125f, getTexture("res/c.png"));
 		renderer.addMesh(o.getMesh());
 
-		if (environmenType == 2)
+		if (environmenType == 1)
 		{
 			worldLight = 10;
 		}
@@ -567,14 +849,6 @@ public class Blocky
 
 		generator.setLighting(renderer, worldLight, s2);
 
-		try
-		{
-			Thread.sleep(250);
-		}
-		catch (java.lang.Exception exception)
-		{
-		}
-
 		renderer.removeMesh(o.getMesh());
 
 		o = new SpriteOverlay(0.05f, -0.17f, 0.25f, 0.125f, getTexture("res/d.png"));
@@ -582,15 +856,90 @@ public class Blocky
 
 		generator.generateMeshes(renderer, s2);
 
-		try
+		renderer.removeMesh(o.getMesh());
+	}
+
+	private void loadWorld(
+		final java.io.File file,
+		final ProgressBarOverlay s2) throws java.lang.Exception
+	{
+		//TODO
+		worldFile = new java.io.RandomAccessFile(file, "rw");
+
+		//TODO
+		worldFile.seek(0);
+
+		//TODO
+		worldFile.readByte();
+		xs = worldFile.readByte() * 16;
+		zs = xs;
+		settings.setWorldSize(xs);
+
+		worldFile.readByte();
+		worldFile.readByte();
+		worldFile.readByte();
+		worldFile.readByte();
+		worldFile.readByte();
+		worldFile.readByte();
+
+		//TODO
+		space = new byte[xs][ys][zs];
+		light = new byte[xs][ys][zs];
+
+		for (int x = 0; x < xs; x++)
 		{
-			Thread.sleep(250);
-		}
-		catch (java.lang.Exception exception)
-		{
+
+			for (int y = 0; y < ys; y++)
+			{
+				worldFile.read(space[x][y]);
+			}
+
+			if ((x & 7) == 0)
+			{
+				s2.setValue((x * 100) / xs, 100);
+				renderer.renderOverlays();
+			}
+
 		}
 
-		renderer.removeMesh(o.getMesh());
+	}
+
+	private void saveWorld(
+		final java.io.File file,
+		final ProgressBarOverlay s2) throws java.lang.Exception
+	{
+		//TODO
+		worldFile = new java.io.RandomAccessFile(file, "rw");
+
+		//TODO
+		worldFile.seek(0);
+
+		//TODO
+		worldFile.writeByte(1);
+		worldFile.writeByte(xs / 16);
+		worldFile.writeByte(0);
+		worldFile.writeByte(0);
+		worldFile.writeByte(0);
+		worldFile.writeByte(0);
+		worldFile.writeByte(0);
+		worldFile.writeByte(0);
+
+		for (int x = 0; x < xs; x++)
+		{
+
+			for (int y = 0; y < ys; y++)
+			{
+				worldFile.write(space[x][y]);
+			}
+
+			if ((x & 7) == 0)
+			{
+				s2.setValue((x * 100) / xs, 100);
+				renderer.renderOverlays();
+			}
+
+		}
+
 	}
 
 	//TODO
@@ -647,8 +996,21 @@ public class Blocky
 	    }
 
 	    // Mouse rotation
-		int mdx = Mouse.getDX();
-		int mdy = Mouse.getDY();
+		int mdx;
+		int mdy;
+
+		if (renderer.eventsReady() == true)
+	    {
+			lastMdx = Mouse.getDX() / 2;
+			lastMdy = Mouse.getDY() / 2;
+	    }
+
+		mdx = lastMdx;
+		mdy = lastMdy;
+
+		//TODO
+//		mdx += 10f * 0.3f * delta;
+		//TODO
 
 		if (mdx != 0)
 		{
@@ -666,7 +1028,7 @@ public class Blocky
 				weight *= 0.5f;
 			}
 
-			xa += (totx / 10f);
+			xa += (totx / 5f);
 //			xa += (mdx * 0.05f);
 		}
 
@@ -686,7 +1048,7 @@ public class Blocky
 				weight *= 0.5f;
 			}
 
-			ya -= (toty / 10f);
+			ya -= (toty / 5f);
 //			ya -= (mdy  * 0.05f);
 		}
 
@@ -928,6 +1290,7 @@ public class Blocky
 				if (pb != null)
 				{
 					generator.updateBlock(renderer, pb, (byte) 0, worldLight);
+					changedBlockList.add(new Vector4f(pb.x, pb.y, pb.z, 0));
 				}
 
 			}
@@ -940,7 +1303,65 @@ public class Blocky
 
 				if (pb != null)
 				{
-					generator.updateBlock(renderer, pb, handblock, worldLight);
+
+					//TODO
+					if ((settings.getBlockMode() == 1) || (settings.getBlockMode() == 2) || (settings.getBlockMode() == 3))
+					{
+						int xsh, ysh, zsh;
+
+						xsh = (xs / 2);
+						ysh = (ys / 2);
+						zsh = (zs / 2);
+
+						vertexBuffer.clear();
+						indexBuffer.clear();
+						Mesh m = new Mesh(Mesh.MeshType.MODEL, false, vertexBuffer, indexBuffer);
+
+						blocks[handblock].draw(m, 0, 0, 0, new float[] {127, 127, 127, 127, 127, 127, 127, 127},
+							true, true, true, true, true, true,
+							false, false, false, false);
+
+						//TODO
+						Actor actor;
+
+						if (settings.getBlockMode() == 2)
+						{
+							actor = new FlyingBlock();
+						}
+						else if (settings.getBlockMode() == 3)
+						{
+							actor = new PlayBlock(settings.getXmov(), settings.getYmov(), settings.getZmov(),
+								settings.getXrot(), settings.getYrot(), settings.getZrot(),
+								settings.getXsin(), settings.getYsin(), settings.getZsin(),
+								settings.getXamp(), settings.getYamp(), settings.getZamp());
+						}
+						else
+						{
+							actor = new MovingBlock();
+						}
+
+						actor.setPosition(new Vector3f(pb.x - xsh, pb.y - ysh, pb.z - zsh));
+						actor.setRotation(new Vector3f(0, 0, 0));
+
+						//TODO
+						actor.setMesh(m);
+
+						//TODO
+						renderer.addMesh(m);
+
+						//TODO
+						synchronized (actorList)
+						{
+							actorList.add(actor);
+						}
+
+					}
+					else
+					{
+						generator.updateBlock(renderer, pb, handblock, worldLight);
+						changedBlockList.add(new Vector4f(pb.x, pb.y, pb.z, handblock));
+					}
+
 				}
 
 			}
@@ -1164,6 +1585,9 @@ public class Blocky
 			lastTime = getTime();
 			lastFps = fps;
 
+			//TODO
+			saveChangedBlocks();
+
 			try
 			{
 				Thread.sleep(1000);
@@ -1173,6 +1597,79 @@ public class Blocky
 				exception.printStackTrace();
 			}
 
+		}
+
+	}
+
+	private void saveChangedBlocks()
+	{
+
+		//TODO
+		while (changedBlockList.size() > 0)
+		{
+			//TODO
+			Vector4f v = changedBlockList.remove(0);
+
+			//TODO
+			try
+			{
+				worldFile.seek(8 + ((int) v.x * ys * zs) + ((int) v.y * zs) + (int) v.z);
+				worldFile.writeByte((byte) v.w);
+			}
+			catch (java.lang.Exception exception)
+			{
+			}
+
+		}
+
+	}
+
+	//TODO
+	public void updateActors()
+	{
+		// Local variables
+		long last;
+		long stime;
+		long etime;
+		long duration;
+		Actor actor;
+
+		last = 0;
+		stime = System.nanoTime();
+
+		while (true)
+		{
+			etime = System.nanoTime();
+
+			//TODO
+//			duration = (etime - stime) / 1000000;
+			duration = (((etime - stime) + last) >> 1) / 1000000;
+
+			synchronized (actorList)
+			{
+
+				//TODO
+				for (int i = 0; i < actorList.size(); i++)
+				{
+					actor = actorList.get(i);
+
+					//TODO
+					actor.act(duration);
+				}
+
+			}
+
+			try
+			{
+				Thread.sleep(32);
+			}
+			catch (java.lang.Exception exception)
+			{
+				exception.printStackTrace();
+			}
+
+			last = etime - stime;
+			stime = etime;
 		}
 
 	}

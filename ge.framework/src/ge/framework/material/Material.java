@@ -21,12 +21,12 @@ public class Material
 		final int xc,
 		final int yc)
 	{
-		x1 = xc / (xd * 1.0f) + (1.0f / 256.0f);
-		x2 = (xc + 1) / (xd * 1.0f) - (1.0f / 256.0f);
+		x1 = xc / (xd * 1.0f) + (1.0f / 1920.0f);
+		x2 = (xc + 1) / (xd * 1.0f) - (1.0f / 1920.0f);
 //		y1 = (yd - yc - 1) / (yd * 1.0f);
 //		y2 = (yd - yc) / (yd * 1.0f);
-		y1 = yc / (yd * 1.0f) + (1.0f / 256.0f);
-		y2 = (yc + 1) / (yd * 1.0f) - (1.0f / 256.0f);
+		y1 = yc / (yd * 1.0f) + (1.0f / 1080.0f);
+		y2 = (yc + 1) / (yd * 1.0f) - (1.0f / 1080.0f);
 	}
 
 	/**

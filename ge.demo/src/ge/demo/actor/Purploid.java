@@ -15,7 +15,7 @@ public class Purploid extends Actor
 		
 	}
 	
-	public void act(int delta)
+	public void act(long delta)
 	{
 		
 	}

@@ -1,30 +1,41 @@
 package ge.framework.shader;
 import org.lwjgl.opengles.GLES20;
 import org.lwjgl.test.opengles.util.Shader;
-import org.lwjgl.test.opengles.util.ShaderProgram;
 
 /**
  * Represents a shader program.
  */
-public class GLES20Program extends ShaderProgram
+public class GLES20Program
 {
+	// Identifier
+	private int id;
+
 	// Model view projection matrix uniform location
 	private int mvpMatrixUniform;
 
-	// Position attribute location
-	private int positionAttribute;
+	// Model position rotation matrix uniform location
+	private int mprMatrixUniform;
 
-	// Normal attribute location
-	private int normalAttribute;
+	// Model position uniform location
+	private int modelPositionUniform;
 
-	// Color attribute location
-	private int colorAttribute;
+	// Model rotation uniform location
+	private int modelRotationUniform;
 
-	// Texture coordinate attribute location
-	private int textureAttribute;
+	// Vertex position attribute location
+	private int vertexPositionAttribute;
 
-	// Texture sampler uniform location
-	private int samplerUniform;
+	// Vertex normal attribute location
+	private int vertexNormalAttribute;
+
+	// Vertex color attribute location
+	private int vertexColorAttribute;
+
+	// Vertex texture coordinate attribute location
+	private int vertexTextureAttribute;
+
+	// Fragment texture sampler uniform location
+	private int fragmentSamplerUniform;
 
 	/**
 	 * Constructor.
@@ -41,33 +52,121 @@ public class GLES20Program extends ShaderProgram
 
 	/**
 	 * Constructor.
-	 * @param vertexShader The vertex shader
-	 * @param fragmentShader The fragment shader
+	 * @param shaders The list of shaders to attach
 	 */
 	public GLES20Program(
-		final Shader vertexShader,
-		final Shader fragmentShader)
+		final Shader... shaders)
 	{
-		// Call super constructor
-		super(vertexShader, fragmentShader);
+		// Create program
+		id = GLES20.glCreateProgram();
+
+		// Attach shaders to program
+		for (Shader shader : shaders)
+		{
+			GLES20.glAttachShader(id, shader.getID());
+		}
+
+		// Link program
+		GLES20.glLinkProgram(id);
+
+		// Failed to link program?
+		if (GLES20.glGetProgram(id, GLES20.GL_LINK_STATUS) == GLES20.GL_FALSE)
+		{
+			// Log program information
+			logProgramInformation();
+
+			// Destroy program
+			destroy();
+
+			throw new java.lang.RuntimeException("Failed to link shader program: " + id);
+		}
 
 		// Get model view projection matrix uniform location
-		mvpMatrixUniform = getUniformLocationChecked("vModelViewProjectionMatrix");
+		mvpMatrixUniform = getUniformLocationChecked("ModelViewProjectionMatrix");
 
-		// Get position attribute location
-		positionAttribute = getAttributeLocationChecked("vPosition");
+		// Get model position rotation matrix uniform location
+		mprMatrixUniform = getUniformLocationChecked("ModelPositionRotationMatrix");
 
-		// Get normal attribute location
-		normalAttribute = getAttributeLocationChecked("vNormal");
+		// Get model position uniform location
+		modelPositionUniform = getUniformLocationChecked("mPosition");
 
-		// Get color attribute location
-		colorAttribute = getAttributeLocationChecked("vColor");
+		// Get model rotation uniform location
+		modelRotationUniform = getUniformLocationChecked("mRotation");
 
-		// Get texture coordinate attribute location
-		textureAttribute = getAttributeLocationChecked("vTexture");
+		// Get vertex position attribute location
+		vertexPositionAttribute = getAttributeLocationChecked("vPosition");
 
-		// Get texture sampler uniform location
-		samplerUniform = getUniformLocationChecked("fTextureSampler");
+		// Get vertex normal attribute location
+		vertexNormalAttribute = getAttributeLocationChecked("vNormal");
+
+		// Get vertex color attribute location
+		vertexColorAttribute = getAttributeLocationChecked("vColor");
+
+		// Get vertex texture coordinate attribute location
+		vertexTextureAttribute = getAttributeLocationChecked("vTexture");
+
+		// Get fragment texture sampler uniform location
+		fragmentSamplerUniform = getUniformLocationChecked("fTextureSampler");
+	}
+
+	/**
+	 * Get identifier.
+	 * @return The identifier
+	 */
+	public int getId()
+	{
+		return id;
+	}
+
+	/**
+	 * Validate shader program.
+	 */
+	public void validate()
+	{
+		// Validate program
+		GLES20.glValidateProgram(id);
+
+		// Failed to validate program?
+		if (GLES20.glGetProgram(id, GLES20.GL_VALIDATE_STATUS) == GLES20.GL_FALSE)
+		{
+			// Log program information
+			logProgramInformation();
+
+			throw new RuntimeException("Failed to validate shader program.");
+		}
+
+	}
+
+	/**
+	 * Destroy shader program.
+	 */
+	public void destroy()
+	{
+		// Delete program
+		GLES20.glDeleteProgram(id);
+	}
+
+	/**
+	 * Get uniform location.
+	 * @param uniform The uniform
+	 * @return The uniform location
+	 */
+	public int getUniformLocation(
+		final String uniform)
+	{
+		// Local variables
+		int location;
+
+		// Get uniform location
+		location = GLES20.glGetUniformLocation(id, uniform);
+
+		// Uniform not defined?
+		if (location == -1)
+		{
+			throw new IllegalArgumentException("Invalid uniform name specified: " + uniform);
+		}
+
+		return location;
 	}
 
 	/**
@@ -90,6 +189,29 @@ public class GLES20Program extends ShaderProgram
 			return -1;
 		}
 
+	}
+
+	/**
+	 * Get attribute location.
+	 * @param attribute The attribute
+	 * @return The attribute location
+	 */
+	public int getAttributeLocation(
+		final String attribute)
+	{
+		// Local variables
+		int location;
+
+		// Get attribute location
+		location = GLES20.glGetAttribLocation(id, attribute);
+
+		// Attribute not defined?
+		if (location == -1)
+		{
+			throw new IllegalArgumentException("Invalid attribute name specified: " + attribute);
+		}
+
+		return location;
 	}
 
 	/**
@@ -120,27 +242,27 @@ public class GLES20Program extends ShaderProgram
 	public void activate()
 	{
 		// Enable shader program
-		super.enable();
+		GLES20.glUseProgram(id);
 
 		// Enable vertex attributes
-		if (positionAttribute != -1)
+		if (vertexPositionAttribute != -1)
 		{
-			GLES20.glEnableVertexAttribArray(positionAttribute);
+			GLES20.glEnableVertexAttribArray(vertexPositionAttribute);
 		}
 
-		if (normalAttribute != -1)
+		if (vertexNormalAttribute != -1)
 		{
-			GLES20.glEnableVertexAttribArray(normalAttribute);
+			GLES20.glEnableVertexAttribArray(vertexNormalAttribute);
 		}
 
-		if (colorAttribute != -1)
+		if (vertexColorAttribute != -1)
 		{
-			GLES20.glEnableVertexAttribArray(colorAttribute);
+			GLES20.glEnableVertexAttribArray(vertexColorAttribute);
 		}
 
-		if (textureAttribute != -1)
+		if (vertexTextureAttribute != -1)
 		{
-			GLES20.glEnableVertexAttribArray(textureAttribute);
+			GLES20.glEnableVertexAttribArray(vertexTextureAttribute);
 		}
 
 	}
@@ -152,28 +274,28 @@ public class GLES20Program extends ShaderProgram
 	{
 
 		// Disable vertex attributes
-		if (positionAttribute != -1)
+		if (vertexPositionAttribute != -1)
 		{
-			GLES20.glDisableVertexAttribArray(positionAttribute);
+			GLES20.glDisableVertexAttribArray(vertexPositionAttribute);
 		}
 
-		if (normalAttribute != -1)
+		if (vertexNormalAttribute != -1)
 		{
-			GLES20.glDisableVertexAttribArray(normalAttribute);
+			GLES20.glDisableVertexAttribArray(vertexNormalAttribute);
 		}
 
-		if (colorAttribute != -1)
+		if (vertexColorAttribute != -1)
 		{
-			GLES20.glDisableVertexAttribArray(colorAttribute);
+			GLES20.glDisableVertexAttribArray(vertexColorAttribute);
 		}
 
-		if (textureAttribute != -1)
+		if (vertexTextureAttribute != -1)
 		{
-			GLES20.glDisableVertexAttribArray(textureAttribute);
+			GLES20.glDisableVertexAttribArray(vertexTextureAttribute);
 		}
 
 		// Disable shader program
-		super.disable();
+		GLES20.glUseProgram(0);
 	}
 
 	/**
@@ -186,48 +308,102 @@ public class GLES20Program extends ShaderProgram
 	}
 
 	/**
-	 * Get position attribute location.
-	 * @return The position attribute location
+	 * Get model position rotation matrix uniform location.
+	 * @return The model position rotation matrix uniform location
 	 */
-	public int getPositionAttribute()
+	public int getMprMatrixUniform()
 	{
-		return positionAttribute;
+		return mprMatrixUniform;
 	}
 
 	/**
-	 * Get normal attribute location.
-	 * @return The normal attribute location
+	 * Get model position uniform location.
+	 * @return The model position uniform location
 	 */
-	public int getNormalAttribute()
+	public int getModelPositionUniform()
 	{
-		return normalAttribute;
+		return modelPositionUniform;
 	}
 
 	/**
-	 * Get color attribute location.
-	 * @return The color attribute location
+	 * Get model rotation uniform location.
+	 * @return The model rotation uniform location
 	 */
-	public int getColorAttribute()
+	public int getModelRotationUniform()
 	{
-		return colorAttribute;
+		return modelRotationUniform;
 	}
 
 	/**
-	 * Get texture coordinate attribute location.
-	 * @return The texture coordinate attribute location
+	 * Get vertex position attribute location.
+	 * @return The vertex position attribute location
 	 */
-	public int getTextureAttribute()
+	public int getVertexPositionAttribute()
 	{
-		return textureAttribute;
+		return vertexPositionAttribute;
 	}
 
 	/**
-	 * Get texture sampler uniform location.
-	 * @return The texture sampler uniform location
+	 * Get vertex normal attribute location.
+	 * @return The vertex normal attribute location
 	 */
-	public int getSamplerUniform()
+	public int getVertexNormalAttribute()
 	{
-		return samplerUniform;
+		return vertexNormalAttribute;
+	}
+
+	/**
+	 * Get vertex color attribute location.
+	 * @return The vertex color attribute location
+	 */
+	public int getVertexColorAttribute()
+	{
+		return vertexColorAttribute;
+	}
+
+	/**
+	 * Get vertex texture coordinate attribute location.
+	 * @return The vertex texture coordinate attribute location
+	 */
+	public int getVertexTextureAttribute()
+	{
+		return vertexTextureAttribute;
+	}
+
+	/**
+	 * Get fragment texture sampler uniform location.
+	 * @return The fragment texture sampler uniform location
+	 */
+	public int getFragmentSamplerUniform()
+	{
+		return fragmentSamplerUniform;
+	}
+
+	/**
+	 * Log program information.
+	 */
+	private void logProgramInformation()
+	{
+		// Local variables
+		int logLength;
+
+		// Get information log length
+		logLength = GLES20.glGetProgram(id, GLES20.GL_INFO_LOG_LENGTH);
+
+		// Print information log length
+		System.out.println(logLength);
+
+		// Information log not defined?
+		if (logLength <= 1)
+		{
+			return;
+		}
+
+		// Print information log length
+		System.out.println("\nInfo log of shader program: " + id);
+		System.out.println("-------------------");
+		System.out.println(GLES20.glGetProgramInfoLog(id, logLength));
+		System.out.println("-------------------");
 	}
 
 }

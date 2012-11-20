@@ -1,66 +1,67 @@
 package ge.demo.actor;
 
+import org.lwjgl.util.vector.Vector3f;
+
 import ge.framework.mesh.Mesh;
 
 public abstract class Actor
 {
-	private float xa = 0, ya = 0, za = 0, xp = 0, yp = 0, zp = 0;
+	//TODO
+	private Mesh mesh;
 
+	//TODO
+	protected Vector3f position;
+
+	//TODO
+	protected Vector3f rotation;
+
+	//TODO
+	protected int action;
+
+	//TODO
+	protected float amount;
+
+	//TODO
+	protected float duration;
+
+	//TODO
 	public Actor()
 	{
-		// TODO Auto-generated constructor stub
 	}
 
 	public abstract void draw(Mesh mesh);
-	
-	public abstract void act(int delta);
-	
-	public float getXa() {
-		return xa;
+
+	public abstract void act(long delta);
+
+	public Mesh getMesh()
+	{
+		return mesh;
 	}
 
-	public void setXa(float xa) {
-		this.xa = xa;
+	public void setMesh(Mesh mesh)
+	{
+		//TODO
+		this.mesh = mesh;
+
+		//TODO
+		mesh.setPosition(position);
+		mesh.setRotation(rotation);
 	}
 
-	public float getYa() {
-		return ya;
+	public Vector3f getPosition() {
+		return position;
 	}
 
-	public void setYa(float ya) {
-		this.ya = ya;
+	public void setPosition(Vector3f position) {
+		this.position = position;
 	}
 
-	public float getZa() {
-		return za;
+	public Vector3f getRotation() {
+		return rotation;
 	}
 
-	public void setZa(float za) {
-		this.za = za;
-	}
-
-	public float getXp() {
-		return xp;
-	}
-
-	public void setXp(float xp) {
-		this.xp = xp;
-	}
-
-	public float getYp() {
-		return yp;
-	}
-
-	public void setYp(float yp) {
-		this.yp = yp;
-	}
-
-	public float getZp() {
-		return zp;
-	}
-
-	public void setZp(float zp) {
-		this.zp = zp;
+	public void setRotation(Vector3f rotation) {
+		this.rotation = rotation;
 	}
 
 }

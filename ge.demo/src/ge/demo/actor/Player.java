@@ -18,7 +18,7 @@ public class Player extends Actor
 		
 	}
 	
-	public void act(int delta)
+	public void act(long delta)
 	{
 		
 	}

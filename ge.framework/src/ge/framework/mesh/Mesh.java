@@ -1,4 +1,5 @@
 package ge.framework.mesh;
+import org.lwjgl.util.vector.Vector3f;
 import org.newdawn.slick.opengl.Texture;
 
 import ge.framework.buffer.FloatBuffer;
@@ -8,12 +9,12 @@ import ge.framework.render.RenderBuffer;
 /**
  * Represents a mesh to be rendered.
  * Includes a vertex buffer and an index buffer.
- * Maintains a bounding box for the mesh.
+ * Maintains a texture, position, rotation and bounding box for the mesh.
  */
 public class Mesh extends RenderBuffer
 {
 	// Mesh types
-	public enum MeshType {OPAQUE, TRANSPARENT, OVERLAY};
+	public enum MeshType {OPAQUE, TRANSPARENT, MODEL, OVERLAY};
 
 	// Mesh type
 	private MeshType meshType;
@@ -41,6 +42,12 @@ public class Mesh extends RenderBuffer
 
 	// Texture
 	private Texture texture;
+
+	// Position
+	private Vector3f position;
+
+	// Rotation
+	private Vector3f rotation;
 
 	// Bounding box
 	private BoundingBox boundingBox;
@@ -187,6 +194,46 @@ public class Mesh extends RenderBuffer
 	{
 		// Set texture
 		this.texture = texture;
+	}
+
+	/**
+	 * Get position.
+	 * @return The position
+	 */
+	public Vector3f getPosition()
+	{
+		return position;
+	}
+
+	/**
+	 * Set position.
+	 * @param position The position
+	 */
+	public void setPosition(
+		final Vector3f position)
+	{
+		// Set position
+		this.position = position;
+	}
+
+	/**
+	 * Get rotation.
+	 * @return The rotation
+	 */
+	public Vector3f getRotation()
+	{
+		return rotation;
+	}
+
+	/**
+	 * Set rotation.
+	 * @param rotation The rotation
+	 */
+	public void setRotation(
+		final Vector3f rotation)
+	{
+		// Set rotation
+		this.rotation = rotation;
 	}
 
 	/**

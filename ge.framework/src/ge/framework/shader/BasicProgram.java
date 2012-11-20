@@ -14,7 +14,7 @@ public class BasicProgram extends GLES20Program
 		// Call super constructor
 		super
 		(
-            "uniform highp mat4 vModelViewProjectionMatrix;\n" +
+            "uniform highp mat4 ModelViewProjectionMatrix;\n" +
             "attribute highp vec3 vPosition;\n" +
             "attribute lowp vec4 vColor;\n" +
             "attribute lowp vec2 vTexture;\n" +
@@ -23,7 +23,7 @@ public class BasicProgram extends GLES20Program
             "void main(void) {\n" +
             "\tfColor = vColor;\n" +
             "\tfTexture = vTexture;\n" +
-            "\tgl_Position = vModelViewProjectionMatrix * vec4(vPosition, 1.0);\n" +
+            "\tgl_Position = ModelViewProjectionMatrix * vec4(vPosition, 1.0);\n" +
             "}"
 			,
 			"uniform sampler2D fTextureSampler;\n" +
