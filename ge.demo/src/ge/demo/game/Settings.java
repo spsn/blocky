@@ -6,10 +6,16 @@ public class Settings
 	private int environmentType;
 	private int terrainType;
 	private int vegetationMode;
+	private int fieldOfView;
+	private int viewingDistance;
+	private boolean waitForVsync;
 	private int blockMode;
 	private String worldFileName;
 	private String textureFileName;
+	private String skinFileName;
+	private String serverAddress;
 	private float xmov, ymov, zmov, xrot, yrot, zrot, xsin, ysin, zsin, xamp, yamp, zamp;
+	private int renderSmooth;
 
 	/**
 	 * Constructor.
@@ -170,6 +176,54 @@ public class Settings
 
 	public void setTextureFileName(String textureFileName) {
 		this.textureFileName = textureFileName;
+	}
+
+	public String getServerAddress() {
+		return serverAddress;
+	}
+
+	public void setServerAddress(String serverAddress) {
+		this.serverAddress = serverAddress;
+	}
+
+	public int getFieldOfView() {
+		return fieldOfView;
+	}
+
+	public void setFieldOfView(int fieldOfView) {
+		this.fieldOfView = fieldOfView;
+	}
+
+	public boolean getWaitForVsync() {
+		return waitForVsync;
+	}
+
+	public void setWaitForVsync(boolean waitForVsync) {
+		this.waitForVsync = waitForVsync;
+	}
+
+	public int getViewingDistance() {
+		return viewingDistance;
+	}
+
+	public void setViewingDistance(int viewingDistance) {
+		this.viewingDistance = viewingDistance;
+	}
+
+	public String getSkinFileName() {
+		return skinFileName;
+	}
+
+	public void setSkinFileName(String skinFileName) {
+		this.skinFileName = skinFileName;
+	}
+
+	public int getRenderSmooth() {
+		return renderSmooth;
+	}
+
+	public void setRenderSmooth(int renderSmooth) {
+		this.renderSmooth = renderSmooth;
 	}
 
 }

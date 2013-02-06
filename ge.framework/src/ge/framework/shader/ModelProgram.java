@@ -33,11 +33,11 @@ public class ModelProgram extends GLES20Program
             "\tposition[3].x=mPosition.x;\n" +
             "\tposition[3].y=mPosition.y;\n" +
             "\tposition[3].z=mPosition.z;\n" +
-            "\tmat4 heading=mat4(1.0);\n" +
-            "\theading[0][0]=cosy;\n" +
-            "\theading[0][2]=-siny;\n" +
-            "\theading[2][0]=siny;\n" +
-            "\theading[2][2]=cosy;\n" +
+            "\tmat4 yaw=mat4(1.0);\n" +
+            "\tyaw[0][0]=cosy;\n" +
+            "\tyaw[0][2]=-siny;\n" +
+            "\tyaw[2][0]=siny;\n" +
+            "\tyaw[2][2]=cosy;\n" +
             "\tmat4 pitch=mat4(1.0);\n" +
             "\tpitch[1][1]=cosx;\n" +
             "\tpitch[1][2]=sinx;\n" +
@@ -50,7 +50,7 @@ public class ModelProgram extends GLES20Program
             "\troll[1][1]=cosz;\n" +
             "\tfColor = vColor;\n" +
             "\tfTexture = vTexture;\n" +
-            "\tgl_Position = ModelViewProjectionMatrix * position * heading * pitch * roll * vec4(vPosition, 1.0);\n" +
+            "\tgl_Position = ModelViewProjectionMatrix * position * yaw * pitch * roll * vec4(vPosition, 1.0);\n" +
             "}"
 			,
 			"uniform sampler2D fTextureSampler;\n" +

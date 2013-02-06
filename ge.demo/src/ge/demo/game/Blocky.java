@@ -1,16 +1,25 @@
 package ge.demo.game;
 import ge.demo.actor.Actor;
+import ge.demo.actor.Box;
 import ge.demo.actor.FlyingBlock;
 import ge.demo.actor.MovingBlock;
 import ge.demo.actor.PlayBlock;
 import ge.demo.actor.Player;
+import ge.demo.network.Client;
+import ge.demo.network.Server;
 import ge.demo.shape.Cube;
 import ge.demo.shape.Deco;
+import ge.demo.shape.DualWedgeA;
+import ge.demo.shape.DualWedgeB;
 import ge.demo.shape.HalfCube;
+import ge.demo.shape.Platform;
+import ge.demo.shape.Pole;
 import ge.demo.shape.Shape;
 import ge.demo.shape.Slate;
 import ge.demo.shape.SunkenCube;
+import ge.demo.shape.Wedge;
 import ge.demo.terrain.Generator;
+import ge.demo.terrain.MeshSet;
 import ge.framework.buffer.FloatBuffer;
 import ge.framework.buffer.ShortBuffer;
 import ge.framework.material.Material;
@@ -29,6 +38,7 @@ import ge.framework.shader.NightFogProgram;
 import ge.framework.shader.RainFogProgram;
 import ge.framework.util.Color;
 import ge.framework.util.Ray;
+
 import org.lwjgl.Sys;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -78,13 +88,17 @@ public class Blocky
 	}
 
 	public final int DEFAULT_WORLD_SIZE = 128;
+	public final int DEFAULT_FIELD_OF_VIEW = 45;
+	public final int DEFAULT_VIEWING_DISTANCE = DEFAULT_WORLD_SIZE;
 
 	private Settings settings;
 
 	private int xs = DEFAULT_WORLD_SIZE, ys = 128, zs = DEFAULT_WORLD_SIZE;
+	private int xsh, ysh, zsh;
 	private Camera camera;
 	private SpriteSelectOverlay materialOverlay;
 	private SpriteOverlay materialBorder;
+	private CounterOverlay materialId;
 	private SpriteOverlay targetOverlay;
 	private CounterOverlay counterOverlay;
 	private GLES20Renderer renderer;
@@ -109,7 +123,11 @@ public class Blocky
 
 	private Counters counters = new Counters();
 
-	private float walkspeed = 0.005f;
+	private float walkMaxSpeed = 0.005f;
+	private float walkAcceleration = walkMaxSpeed / 25.0f;
+	private float bfspeed = 0.0f;
+	private float lrspeed = 0.0f;
+	private boolean movef, moveb, movel, mover;
 
 	private byte handblock = 1;
 
@@ -119,10 +137,22 @@ public class Blocky
 	private FloatBuffer vertexBuffer;
 	private ShortBuffer indexBuffer;
 
+	private Server server;
+	private Client client;
+
+	private java.util.Map<Integer, Player> playerMap;
 	private java.util.List<Vector4f> changedBlockList;
+	private java.util.List<Vector4f> unsavedBlockList;
 	private java.util.List<Actor> actorList;
 
-	private int lastMdx, lastMdy;
+	private Texture texture;
+	private Texture playerTexture;
+
+	private SpriteOverlay serverClosed;
+	private float[] deltaSet;
+	
+	private Vector3f infectionBlockPos;
+	private Vector3f plantBlockPos;
 
 	public void start(
 		final String[] argv)
@@ -152,16 +182,19 @@ public class Blocky
 			vertexBuffer = new FloatBuffer(16 * 16 * 16 * 6 * 4 * 12);
 			indexBuffer = new ShortBuffer(16 * 16 * 16 * 6 * 4);
 
+			playerMap = new java.util.HashMap<Integer, Player>();
 			changedBlockList = new java.util.LinkedList<Vector4f>();
+			unsavedBlockList = new java.util.LinkedList<Vector4f>();
 			actorList = new java.util.ArrayList<Actor>();
 
 			// Create camera
 			camera = new Camera();
-			camera.setFieldOfView(45.0f);
-			camera.setViewingDistance(xs);
+			camera.setFieldOfView(settings.getFieldOfView());
+			camera.setViewingDistance(settings.getViewingDistance());
 
 			// Create renderer
 			renderer = new GLES20Renderer();
+			renderer.setWaitForVsync(settings.getWaitForVsync());
 			renderer.setBackgroundColor(new Color(0.6f, 0.6f, 1.0f, 1.0f));
 			renderer.createDisplay();
 			renderer.setCamera(camera);
@@ -226,7 +259,6 @@ public class Blocky
 
 			// Load texture
 			//TODO
-			Texture texture;
 			texture = getTexture(settings.getTextureFileName());
 			renderer.setTexture(texture);
 
@@ -234,7 +266,7 @@ public class Blocky
 			renderer.renderOverlays();
 
 			//TODO
-			materialOverlay = new SpriteSelectOverlay(-0.954f, -0.92f, 0.075f, 0.133f, texture);
+			materialOverlay = new SpriteSelectOverlay(-0.935f, -0.92f, 0.075f, 0.133f, texture);
 
 			for (int i = 1; i < blocks.length; i++)
 			{
@@ -244,7 +276,10 @@ public class Blocky
 			}
 
 			//TODO
-			materialBorder = new SpriteOverlay(-0.954f, -0.92f, 0.08f, 0.142f, getTexture("res/border.png"));
+			materialBorder = new SpriteOverlay(-0.935f, -0.92f, 0.08f, 0.142f, getTexture("res/border.png"));
+
+			//TODO
+			materialId = new CounterOverlay(-0.985f, -0.78f, 0.1f, 0.05f, getTexture("res/numbers1.png"));
 
 			//TODO
 			targetOverlay = new SpriteOverlay(0, 0, 0.045f, 0.075f, getTexture("res/spiral3.png"));
@@ -253,23 +288,64 @@ public class Blocky
 			renderer.renderOverlays();
 
 			//TODO
-			counterOverlay = new CounterOverlay(-0.985f, 0.98f, 0.1f, 0.04f, getTexture("res/numbers1.png"));
+			counterOverlay = new CounterOverlay(-0.985f, 0.98f, 0.1f, 0.05f, getTexture("res/numbers1.png"));
+
+			s2.setValue(90, 100);
+			renderer.renderOverlays();
+
+			//TODO
+			serverClosed = new SpriteOverlay(0.19f, 0.0f, 1.0f, 0.2f, getTexture("res/ServerClosed.png"));
 
 			s2.setValue(100, 100);
 			renderer.renderOverlays();
 
 			renderer.removeMesh(o.getMesh());
 
+			//TODO - sky
+
 			//TODO
-			buildSpace(settings, s2);
+			if (settings.getServerAddress() != null)
+			{
+
+				if (settings.getServerAddress().equals("local") == true)
+				{
+					server = new Server(this, 50000);
+				}
+				else
+				{
+					client = new Client(this, settings.getServerAddress(), 50000);
+				}
+
+			}
+
+			//TODO
+			buildSpace(settings, client, s2);
+
+			//TODO
+			xsh = xs >> 1;
+			ysh = ys >> 1;
+			zsh = zs >> 1;
+
+			//TODO
+			if (settings.getServerAddress() != null)
+			{
+
+				if (settings.getServerAddress().equals("local") == true)
+				{
+					client = new Client(this, "localhost", 50000);
+				}
+
+			}
 
 			//TODO
 			renderer.addMesh(materialOverlay.getMesh());
 			renderer.addMesh(materialBorder.getMesh());
+			renderer.addMesh(materialId.getMesh());
 			renderer.addMesh(targetOverlay.getMesh());
 			renderer.addMesh(counterOverlay.getMesh());
 
 			materialOverlay.start();
+			materialId.setValue(handblock);
 			counterOverlay.setValue(0);
 
 			renderer.removeMesh(b.getMesh());
@@ -292,26 +368,34 @@ public class Blocky
 
 			renderer.setBackgroundColor(backgroundColor);
 
-			//TODO
-			player = new Player();
-
 			// Set player starting position
 			//TODO v
 			for (int y = (ys - 1); y >= 0; y--)
 			{
 				//TODO
-				byte block = space[xs / 2][y][zs / 2];
+				byte block = space[xsh][y][zsh];
 
 				if ((block != 0) && (block != 6) && (block != 14))
 				{
 					// Set player starting position
-					camera.setPositionY(-pheight + ((ys / 2) - y) - 0.5f);
+					camera.setPositionY(-pheight + (ysh - y) - 0.5f);
 
 					break;
 				}
 
 			}
 			//TODO ^
+
+			//TODO
+			playerTexture = getTexture(settings.getSkinFileName());
+
+			//TODO
+			player = new Player();
+			player.setPosition(new Vector3f(-camera.getPositionX(), -(camera.getPositionY() + pheight + 0.5f), -camera.getPositionZ()));
+			player.setRotation(new Vector3f(0, 0, 0));
+
+			//TODO
+			addPlayerMeshes(player);
 
 			//TODO
 			actorThread = new ActorThread(this);
@@ -330,6 +414,9 @@ public class Blocky
 		}
 
 		//TODO
+		deltaSet = new float[settings.getRenderSmooth()];
+
+		//TODO
 		getDelta(); // call once before loop to initialise lastFrame
 
 		time = System.currentTimeMillis();
@@ -337,10 +424,23 @@ public class Blocky
 
 		while (true)
 		{
+			//TODO
+			generator.applyChangedMeshes(renderer);
 
+			//TODO
 			if (renderer.renderScene() == false)
 			{
 				break;
+			}
+
+			//TODO
+			if ((client != null) && (client.isConnected() == false))
+			{
+				//TODO
+				renderer.addMesh(serverClosed.getMesh());
+
+				//TODO
+				client = null;
 			}
 
 			//TODO
@@ -350,23 +450,18 @@ public class Blocky
 			}
 
 			fps++;
-
-//			try
-//			{
-//				overlay.setText(" " + fps + "");
-//			}
-//			catch (java.lang.Exception exception)
-//			{
-//				exception.printStackTrace();
-//			}
-
 		}
 
 		//TODO
 		try
 		{
-			saveChangedBlocks();
-			worldFile.close();
+
+			if (worldFile != null)
+			{
+				saveChangedBlocks();
+				worldFile.close();
+			}
+
 		}
 		catch (java.lang.Exception exception)
 		{
@@ -380,11 +475,6 @@ public class Blocky
 	}
 
 	//TODO
-	//size=128-256 [16]
-	//mood=day|night|gloomy
-	//terrain=hills|ponds|flat,noveg
-	//block=place|move|fly
-	//file=???
 	private Settings getSettings(
 		final String[] argv) throws java.lang.Exception
 	{
@@ -398,9 +488,14 @@ public class Blocky
 		settings.setWorldSize(DEFAULT_WORLD_SIZE);
 		settings.setEnvironmentType(0);
 		settings.setTerrainType(0);
+		settings.setFieldOfView(DEFAULT_FIELD_OF_VIEW);
+		settings.setViewingDistance(DEFAULT_VIEWING_DISTANCE);
+		settings.setWaitForVsync(true);
 		settings.setBlockMode(0);
 		settings.setWorldFileName("world.blocky");
 		settings.setTextureFileName("res/terrain.png");
+		settings.setSkinFileName("res/BlockyGuyPic.png");
+		settings.setRenderSmooth(5);
 
 		// Read settings from command line
 		for (int i = 0; i < argv.length; i++)
@@ -469,6 +564,18 @@ public class Blocky
 					}
 
 				}
+				else if ("fov".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setFieldOfView(Integer.parseInt(components[1]));
+				}
+				else if ("viewdist".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setViewingDistance(Integer.parseInt(components[1]));
+				}
+				else if ("vsync".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setWaitForVsync("no".equals(components[1]) == false);
+				}
 				else if ("block".equalsIgnoreCase(components[0]) == true)
 				{
 
@@ -497,6 +604,14 @@ public class Blocky
 				else if ("texture".equalsIgnoreCase(components[0]) == true)
 				{
 					settings.setTextureFileName(components[1]);
+				}
+				else if ("skin".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setSkinFileName(components[1]);
+				}
+				else if ("server".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setServerAddress(components[1]);
 				}
 				else if ("xmov".equalsIgnoreCase(components[0]) == true)
 				{
@@ -545,6 +660,10 @@ public class Blocky
 				else if ("zamp".equalsIgnoreCase(components[0]) == true)
 				{
 					settings.setZamp(Float.parseFloat(components[1]));
+				}
+				else if ("rsf".equalsIgnoreCase(components[0]) == true)
+				{
+					settings.setRenderSmooth(Integer.parseInt(components[1]));
 				}
 
 			}
@@ -649,7 +768,7 @@ public class Blocky
 	//TODO
 	public void createMaterials()
 	{
-		materials = new Material[38];
+		materials = new Material[53];
 		// Grass
 		materials[0] = new Material(16, 16, 0, 0);
 		// Grass+dirt
@@ -719,19 +838,49 @@ public class Blocky
 		// Torch
 		materials[33] = new Material(16, 16, 0, 5);
 		// Leaf
-		materials[34] = new Material(16, 16, 9, 3);
+		materials[34] = new Material(16, 16, 4, 3);
 		// Pumpkin front
 		materials[35] = new Material(16, 16, 7, 7);
 		// Pumpkin top
 		materials[36] = new Material(16, 16, 6, 6);
 		// Pumpkin sides
 		materials[37] = new Material(16, 16, 6, 7);
+		// Glass
+		materials[38] = new Material(16, 16, 1, 3);
+		// Dark wood planks
+		materials[39] = new Material(16, 16, 6, 12);
+		// Infection Core
+		materials[40] = new Material(16, 16, 9, 2);
+		// Mutant Plant Block
+		materials[41] = new Material(16, 16, 9, 3);
+		// Mutant Seed
+		materials[42] = new Material(16, 16, 11, 1);
+		// Infected Grass Top
+		materials[43] = new Material(16, 16, 10, 1);
+		// Infected Dirt
+		materials[44] = new Material(16, 16, 10, 2);
+		// Infected Grass Side
+		materials[45] = new Material(16, 16, 10, 3);
+		// Infected Stone
+		materials[46] = new Material(16, 16, 8, 11);
+		// Blue glass
+		materials[47] = new Material(16, 16, 7, 14);
+		// Green glass
+		materials[48] = new Material(16, 16, 8, 14);
+		// Red glass
+		materials[49] = new Material(16, 16, 7, 13);
+		// Yellow glass
+		materials[50] = new Material(16, 16, 8, 13);
+		// White glass
+		materials[51] = new Material(16, 16, 9, 14);
+		// Black glass
+		materials[52] = new Material(16, 16, 9, 13);
 	}
 
 	//TODO
 	public void createBlocks()
 	{
-		blocks = new Shape[33];
+		blocks = new Shape[61];
 		// Air
 		blocks[0] = null;
 		// Grass+dirt
@@ -798,11 +947,68 @@ public class Blocky
 		blocks[31] = new Deco(new Material[] {materials[34], materials[34], materials[34], materials[34], materials[34], materials[34]}); // Top, Bottom, Front, Back, Left, Right
 		// Pumpkin
 		blocks[32] = new Cube(new Material[] {materials[36], materials[37], materials[35], materials[37], materials[37], materials[37]}); // Top, Bottom, Front, Back, Left, Right
+		// Glass
+		blocks[33] = new Cube(new Material[] {materials[38], materials[38], materials[38], materials[38], materials[38], materials[38]}); // Top, Bottom, Front, Back, Left, Right
+		// Wooden platform
+		blocks[34] = new Platform(new Material[] {materials[16], materials[16], materials[16], materials[16], materials[16], materials[16]}); // Top, Bottom, Front, Back, Left, Right
+		// Wooden pole
+		blocks[35] = new Pole(new Material[] {materials[16], materials[16], materials[16], materials[16], materials[16], materials[16]}); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge
+		blocks[36] = new Wedge(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 1); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge
+		blocks[37] = new Wedge(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 2); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge
+		blocks[38] = new Wedge(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 3); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge
+		blocks[39] = new Wedge(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 4); // Top, Bottom, Front, Back, Left, Right
+		// Dark wooden plank
+		blocks[40] = new Cube(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge
+		blocks[41] = new DualWedgeA(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 1); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge
+		blocks[42] = new DualWedgeB(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 2); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge
+		blocks[43] = new DualWedgeA(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 3); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge
+		blocks[44] = new DualWedgeB(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 4); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge 2
+		blocks[45] = new DualWedgeB(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 1); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge 2
+		blocks[46] = new DualWedgeA(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 2); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge 2
+		blocks[47] = new DualWedgeB(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 3); // Top, Bottom, Front, Back, Left, Right
+		// Wooden wedge 2
+		blocks[48] = new DualWedgeA(new Material[] {materials[39], materials[39], materials[39], materials[39], materials[39], materials[39]}, 4); // Top, Bottom, Front, Back, Left, Right
+		// Infection Core
+		blocks[49] = new Cube(new Material[] {materials[40], materials[40], materials[40], materials[40], materials[40], materials[40]}); // Top, Bottom, Front, Back, Left, Right
+		// Mutant Plant Block
+		blocks[50] = new Cube(new Material[] {materials[41], materials[41], materials[41], materials[41], materials[41], materials[41]}); // Top, Bottom, Front, Back, Left, Right
+		// Mutant Seed
+		blocks[51] = new Cube(new Material[] {materials[42], materials[42], materials[42], materials[42], materials[42], materials[42]}); // Top, Bottom, Front, Back, Left, Right
+		// Infected Grass
+		blocks[52] = new Cube(new Material[] {materials[43], materials[44], materials[45], materials[45], materials[45], materials[45]}); // Top, Bottom, Front, Back, Left, Right
+		// Infected Dirt
+		blocks[53] = new Cube(new Material[] {materials[44], materials[44], materials[44], materials[44], materials[44], materials[44]}); // Top, Bottom, Front, Back, Left, Right
+		// Infected Stone
+		blocks[54] = new Cube(new Material[] {materials[46], materials[46], materials[46], materials[46], materials[46], materials[46]}); // Top, Bottom, Front, Back, Left, Right
+		// Blue glass
+		blocks[55] = new Cube(new Material[] {materials[47], materials[47], materials[47], materials[47], materials[47], materials[47]}); // Top, Bottom, Front, Back, Left, Right
+		// Green glass
+		blocks[56] = new Cube(new Material[] {materials[48], materials[48], materials[48], materials[48], materials[48], materials[48]}); // Top, Bottom, Front, Back, Left, Right
+		// Red class
+		blocks[57] = new Cube(new Material[] {materials[49], materials[49], materials[49], materials[49], materials[49], materials[49]}); // Top, Bottom, Front, Back, Left, Right
+		// Yellow class
+		blocks[58] = new Cube(new Material[] {materials[50], materials[50], materials[50], materials[50], materials[50], materials[50]}); // Top, Bottom, Front, Back, Left, Right
+		// White class
+		blocks[59] = new Cube(new Material[] {materials[51], materials[51], materials[51], materials[51], materials[51], materials[51]}); // Top, Bottom, Front, Back, Left, Right
+		// Black class
+		blocks[60] = new Cube(new Material[] {materials[52], materials[52], materials[52], materials[52], materials[52], materials[52]}); // Top, Bottom, Front, Back, Left, Right
 	}
 
 	//TODO
 	public void buildSpace(
 		final Settings settings,
+		final Client client,
 		final ProgressBarOverlay s2) throws java.lang.Exception
 	{
 		// Local variables
@@ -812,25 +1018,40 @@ public class Blocky
 		SpriteOverlay o = new SpriteOverlay(0.05f, -0.17f, 0.25f, 0.125f, getTexture("res/b.png"));
 		renderer.addMesh(o.getMesh());
 
-		//TODO - load or generate
-		file = new java.io.File(settings.getWorldFileName());
-
-		if (file.exists() == true)
+		//TODO
+		if (client != null)
 		{
-			loadWorld(file, s2);
+			space = client.getWorldData(renderer, s2);
+			xs = space.length;
+			ys = space[0].length;
+			zs = space[0][0].length;
+			light = new byte[xs][ys][zs];
 
 			generator = new Generator(xs, ys, zs, (float) Math.pow((xs / 128.0f), 2.0f) / 4.0f, space, light, blocks, counters);
 		}
 		else
 		{
-			space = new byte[xs][ys][zs];
-			light = new byte[xs][ys][zs];
+			//TODO - load or generate
+			file = new java.io.File(settings.getWorldFileName());
 
-			generator = new Generator(xs, ys, zs, (float) Math.pow((xs / 128.0f), 2.0f) / 4.0f, space, light, blocks, counters);
+			if (file.exists() == true)
+			{
+				loadWorld(file, s2);
 
-			generator.generateTerrain(settings, renderer, s2);
+				generator = new Generator(xs, ys, zs, (float) Math.pow((xs / 128.0f), 2.0f) / 4.0f, space, light, blocks, counters);
+			}
+			else
+			{
+				space = new byte[xs][ys][zs];
+				light = new byte[xs][ys][zs];
 
-			saveWorld(file, s2);
+				generator = new Generator(xs, ys, zs, (float) Math.pow((xs / 128.0f), 2.0f) / 4.0f, space, light, blocks, counters);
+
+				generator.generateTerrain(settings, renderer, s2);
+
+				saveWorld(file, s2);
+			}
+
 		}
 
 		renderer.removeMesh(o.getMesh());
@@ -871,7 +1092,7 @@ public class Blocky
 
 		//TODO
 		worldFile.readByte();
-		xs = worldFile.readByte() * 16;
+		xs = worldFile.readByte() << 4;
 		zs = xs;
 		settings.setWorldSize(xs);
 
@@ -916,7 +1137,7 @@ public class Blocky
 
 		//TODO
 		worldFile.writeByte(1);
-		worldFile.writeByte(xs / 16);
+		worldFile.writeByte(xs >> 4);
 		worldFile.writeByte(0);
 		worldFile.writeByte(0);
 		worldFile.writeByte(0);
@@ -942,15 +1163,57 @@ public class Blocky
 
 	}
 
-	//TODO
-	private float[] pitchh = new float[10];
-	private float[] yawh = new float[10];
-	private float[] deltah = new float[10];
+	private float smoothDelta(float newDelta)
+	{
+		//TODO
+		int length;
+		float total;
+
+		//TODO
+		length = deltaSet.length;
+		total = 0;
+
+		//TODO
+		if (length > 1)
+		{
+
+			//TODO
+			for (int i = 1; i < length; i++)
+			{
+				total += deltaSet[i];
+				deltaSet[i - 1] = deltaSet[i];
+			}
+
+		}
+
+		//TODO
+		total += newDelta;
+		deltaSet[length - 1] = newDelta;
+
+		return total / length;
+	}
 
 	//TODO
-	//TODO - d = 1-exp(log(0.5)*springiness*time_d | xd * d, yd * d
-	public boolean update(float delta)
+//	private float lastDelta = 0;
+	public boolean update(float newDelta)
 	{
+		//TODO
+//		if (newDelta > 18)
+//		System.out.println("----------------------------(+) " + newDelta);
+//		if (newDelta < 15)
+//		System.out.println("----------------------------(-) " + newDelta);
+		//TODO
+		if (newDelta <= 0) return true;
+		if (newDelta < 16) newDelta = 16;
+//		System.out.println("------------------------------> " + newDelta);
+		//TODO
+//		delta = 16;
+//		float delta = (newDelta + lastDelta) / 2.0f;
+//		lastDelta = newDelta;
+		float delta = smoothDelta(newDelta);
+		//TODO
+//		System.out.println("--------------------------->==> " + delta);
+
 		// Local variables
 		float xa = camera.getPitch();
 		float ya = camera.getYaw();
@@ -958,22 +1221,27 @@ public class Blocky
 		float yp = camera.getPositionY();
 		float zp = camera.getPositionZ();
 
-		if (delta == 0) return true;
+//		if (delta == 0) return true;
 
 //    	float feet = yp + pheight;
 //
-//    	byte block = space[(xs / 2) - Math.round(xp)][(ys / 2) - Math.round(feet)][(zs / 2) - Math.round(zp)];
+//    	byte block = space[xsh - Math.round(xp)][ysh - Math.round(feet)][zsh - Math.round(zp)];
 //
 //		if (gspeed != 0)
 //		{
 //			gspeed += 0.0098f * 0.01f * delta;
 //		}
 //		else if ((block == 0) || (block == 6) || (block == 14) || (block == 26))
+    	if ((Keyboard.getEventKey() == Keyboard.KEY_LSHIFT) && (Keyboard.getEventKeyState() == true) || ((Keyboard.getEventKey() == Keyboard.KEY_RSHIFT) && (Keyboard.getEventKeyState() == true)))
+		{
+			gspeed += -0.098f * 0.0025f * delta;
+		}
+    	else
 		{
 			gspeed += 0.098f * 0.0025f * delta;
 		}
 
-	    while(Keyboard.next() == true)
+	    while (Keyboard.next() == true)
 	    {
 
 	    	if ((Keyboard.getEventKey() == Keyboard.KEY_ESCAPE) && (Keyboard.getEventKeyState() == true))
@@ -981,16 +1249,95 @@ public class Blocky
 				return false;
 	        }
 
-	    	if ((Keyboard.getEventKey() == Keyboard.KEY_1) && (Keyboard.getEventKeyState() == true))
+	    	//TODO - forward
+			if ((Keyboard.getEventKey() == Keyboard.KEY_W) && (Keyboard.getEventKeyState() == true))
+			{
+		    	movef = true;
+		    	moveb = false;
+		    }
+
+			if ((Keyboard.getEventKey() == Keyboard.KEY_W) && (Keyboard.getEventKeyState() == false))
+			{
+		    	movef = false;
+		    }
+
+	    	//TODO - backward
+			if ((Keyboard.getEventKey() == Keyboard.KEY_S) && (Keyboard.getEventKeyState() == true))
+			{
+		    	moveb = true;
+		    	movef = false;
+		    }
+
+			if ((Keyboard.getEventKey() == Keyboard.KEY_S) && (Keyboard.getEventKeyState() == false))
+			{
+		    	moveb = false;
+		    }
+
+	    	//TODO - left
+			if ((Keyboard.getEventKey() == Keyboard.KEY_A) && (Keyboard.getEventKeyState() == true))
+			{
+		    	movel = true;
+		    	mover = false;
+		    }
+
+			if ((Keyboard.getEventKey() == Keyboard.KEY_A) && (Keyboard.getEventKeyState() == false))
+			{
+		    	movel = false;
+		    }
+
+	    	//TODO - right
+			if ((Keyboard.getEventKey() == Keyboard.KEY_D) && (Keyboard.getEventKeyState() == true))
+			{
+		    	mover = true;
+		    	movel = false;
+		    }
+
+			if ((Keyboard.getEventKey() == Keyboard.KEY_D) && (Keyboard.getEventKeyState() == false))
+			{
+		    	mover = false;
+		    }
+
+			//TODO - selector
+			if ((Keyboard.getEventKey() == Keyboard.KEY_1) && (Keyboard.getEventKeyState() == true))
 	    	{
 	    		materialOverlay.shiftDown();
 				handblock = (byte) (materialOverlay.getIndex() + 1);
+				materialId.setValue(handblock);
 	        }
 
 	    	if ((Keyboard.getEventKey() == Keyboard.KEY_2) && (Keyboard.getEventKeyState() == true))
 	    	{
 	    		materialOverlay.shiftUp();
 				handblock = (byte) (materialOverlay.getIndex() + 1);
+				materialId.setValue(handblock);
+	        }
+
+	    	//TODO
+	    	//TODO
+	    	if ((Keyboard.getEventKey() == Keyboard.KEY_7) && (Keyboard.getEventKeyState() == true))
+	    	{
+	    		deltaSet = new float[1];
+	        }
+
+	    	//TODO
+	    	//TODO
+	    	if ((Keyboard.getEventKey() == Keyboard.KEY_8) && (Keyboard.getEventKeyState() == true))
+	    	{
+	    		deltaSet = new float[2];
+	        }
+
+	    	//TODO
+	    	//TODO
+	    	if ((Keyboard.getEventKey() == Keyboard.KEY_9) && (Keyboard.getEventKeyState() == true))
+	    	{
+	    		deltaSet = new float[5];
+	        }
+
+	    	//TODO
+	    	//TODO
+	    	if ((Keyboard.getEventKey() == Keyboard.KEY_0) && (Keyboard.getEventKeyState() == true))
+	    	{
+	    		deltaSet = new float[10];
 	        }
 
 	    }
@@ -999,96 +1346,23 @@ public class Blocky
 		int mdx;
 		int mdy;
 
-		if (renderer.eventsReady() == true)
-	    {
-			lastMdx = Mouse.getDX() / 2;
-			lastMdy = Mouse.getDY() / 2;
-	    }
-
-		mdx = lastMdx;
-		mdy = lastMdy;
-
-		//TODO
-//		mdx += 10f * 0.3f * delta;
-		//TODO
+		mdx = Mouse.getDX();
+//		mdx = Mouse.getDX() + 10;
+//		if (mdx != 10) System.out.println(mdx + " ******************************");
+		mdy = Mouse.getDY();
 
 		if (mdx != 0)
 		{
-			float totx = 0;
-			float weight = 1.0f;
-
-			for (int i = 8; i >= 0; i--)
-			{
-				pitchh[i + 1] = pitchh[i];
-			}
-			pitchh[0] = (mdx * 0.1f);
-			for (int i = 0; i < 10; i++)
-			{
-				totx += (pitchh[i] * weight);
-				weight *= 0.5f;
-			}
-
-			xa += (totx / 5f);
-//			xa += (mdx * 0.05f);
+			xa += (mdx * 0.1f * (delta / newDelta));
+//			xa += (mdx * 0.1f);
+//TODO			System.out.println("------------------------------> " + xa);
 		}
 
 		if (mdy != 0)
 		{
-			float toty = 0;
-			float weight = 1.0f;
-
-			for (int i = 8; i >= 0; i--)
-			{
-				yawh[i + 1] = yawh[i];
-			}
-			yawh[0] = (mdy  * 0.1f);
-			for (int i = 0; i < 10; i++)
-			{
-				toty += (yawh[i] * weight);
-				weight *= 0.5f;
-			}
-
-			ya -= (toty / 5f);
-//			ya -= (mdy  * 0.05f);
+			ya -= (mdy  * 0.1f * (delta / newDelta));
+//			ya -= (mdy  * 0.1f);
 		}
-
-//		if (mdx != 0)
-//		{
-//			oxa += (mdx * 0.05f);
-//		}
-//
-//		if (mdy != 0)
-//		{
-//			oya += (mdy * 0.05f);
-//		}
-//
-//		float fd = (45f / 1000f) * delta;
-//
-//		if (oxa > 0)
-//		{
-//			float fdd = (fd > oxa) ? oxa : fd;
-//			oxa -= fdd;
-//			xa += fdd;
-//		}
-//		else if (oxa < 0)
-//		{
-//			float fdd = (fd > -oxa) ? -oxa : fd;
-//			oxa += fdd;
-//			xa -= fdd;
-//		}
-//
-//		if (oya > 0)
-//		{
-//			float fdd = (fd > oya) ? oya : fd;
-//			oya -= fdd;
-//			ya -= fdd;
-//		}
-//		else if (oya < 0)
-//		{
-//			float fdd = (fd > -oya) ? -oya : fd;
-//			oya += fdd;
-//			ya += fdd;
-//		}
 
 		if (xa > 180)
 		{
@@ -1113,38 +1387,73 @@ public class Blocky
 		// Keyboard movement
 		boolean keymoved = false;
 
-	    if (Keyboard.isKeyDown(Keyboard.KEY_A))
+	    //TODO - forward
+	    if (movef == true)
 	    {
-	    	xp -= (float)Math.sin(Math.toRadians(xa - 90)) * (walkspeed * delta);
-	    	zp += (float)Math.cos(Math.toRadians(xa - 90)) * (walkspeed * delta);
+	    	bfspeed += walkAcceleration;
+	    	bfspeed = (bfspeed > walkMaxSpeed) ? walkMaxSpeed: bfspeed;
+		}
+	    else if (bfspeed > 0)
+	    {
+	    	bfspeed -= walkAcceleration;
+	    	bfspeed = (bfspeed < 0) ? 0 : bfspeed;
+	    }
+
+	    //TODO - backward
+	    if (moveb == true)
+	    {
+	    	bfspeed -= walkAcceleration;
+	    	bfspeed = (bfspeed < -walkMaxSpeed) ? -walkMaxSpeed: bfspeed;
+		}
+	    else if (bfspeed < 0)
+	    {
+	    	bfspeed += walkAcceleration;
+	    	bfspeed = (bfspeed > 0) ? 0 : bfspeed;
+	    }
+
+	    //TODO forward/backward
+	    if (bfspeed != 0)
+	    {
+	    	xp -= (float)Math.sin(Math.toRadians(xa)) * (bfspeed * delta);
+	    	zp += (float)Math.cos(Math.toRadians(xa)) * (bfspeed * delta);
 
 	    	keymoved = true;
 	    }
 
-	    if (Keyboard.isKeyDown(Keyboard.KEY_D))
-		{
-			xp += (float)Math.sin(Math.toRadians(xa - 90)) * (walkspeed * delta);
-			zp -= (float)Math.cos(Math.toRadians(xa - 90)) * (walkspeed * delta);
+	    //TODO - left
+	    if (movel == true)
+	    {
+	    	lrspeed += walkAcceleration;
+	    	lrspeed = (lrspeed > walkMaxSpeed) ? walkMaxSpeed: lrspeed;
+		}
+	    else if (lrspeed > 0)
+	    {
+	    	lrspeed -= walkAcceleration;
+	    	lrspeed = (lrspeed < 0) ? 0 : lrspeed;
+	    }
+
+	    //TODO - right
+	    if (mover == true)
+	    {
+	    	lrspeed -= walkAcceleration;
+	    	lrspeed = (lrspeed < -walkMaxSpeed) ? -walkMaxSpeed: lrspeed;
+		}
+	    else if (lrspeed < 0)
+	    {
+	    	lrspeed += walkAcceleration;
+	    	lrspeed = (lrspeed > 0) ? 0 : lrspeed;
+	    }
+
+	    //TODO left/right
+	    if (lrspeed != 0)
+	    {
+	    	xp -= (float)Math.sin(Math.toRadians(xa - 90)) * (lrspeed * delta);
+	    	zp += (float)Math.cos(Math.toRadians(xa - 90)) * (lrspeed * delta);
 
 	    	keymoved = true;
-		}
+	    }
 
-		if (Keyboard.isKeyDown(Keyboard.KEY_W))
-		{
-	    	xp -= (float)Math.sin(Math.toRadians(xa)) * (walkspeed * delta);
-	    	zp += (float)Math.cos(Math.toRadians(xa)) * (walkspeed * delta);
-
-	    	keymoved = true;
-		}
-
-		if (Keyboard.isKeyDown(Keyboard.KEY_S))
-		{
-	    	xp += (float)Math.sin(Math.toRadians(xa)) * (walkspeed * delta);
-	    	zp -= (float)Math.cos(Math.toRadians(xa)) * (walkspeed * delta);
-
-	    	keymoved = true;
-		}
-
+	    //TODO - movement
 		if (keymoved == true)
 		{
 	    	int bxp = Math.round(xp);
@@ -1152,8 +1461,8 @@ public class Blocky
 
 	    	float feet = yp + pheight - 0.01f;
 
-	    	byte blockeye = space[(xs / 2) - bxp][(ys / 2) - Math.round(yp)][(zs / 2) - bzp];
-	    	byte blockfeet = space[(xs / 2) - bxp][(ys / 2) - Math.round(feet)][(zs / 2) - bzp];
+	    	byte blockeye = space[xsh - bxp][ysh - Math.round(yp)][zsh - bzp];
+	    	byte blockfeet = space[xsh - bxp][ysh - Math.round(feet)][zsh - bzp];
 
 			if (((blockeye != 0) && (blockeye != 6) && (blockeye != 14) && (blockeye != 20) && (blockeye != 21) && (blockeye != 22) && (blockeye != 23) && (blockeye != 26) && (blockeye != 27) && (blockeye != 28) && (blockeye != 30))
 	    		|| ((blockfeet != 0) && (blockfeet != 6) && (blockfeet != 14) && (blockfeet != 20) && (blockfeet != 21) && (blockfeet != 22) && (blockfeet != 23) && (blockfeet != 26) && (blockfeet != 27) && (blockfeet != 28) && (blockfeet != 30)))
@@ -1162,8 +1471,8 @@ public class Blocky
 
 		    	int czp = Math.round(nzp);
 
-		    	blockeye = space[(xs / 2) - bxp][(ys / 2) - Math.round(yp)][(zs / 2) - czp];
-		    	blockfeet = space[(xs / 2) - bxp][(ys / 2) - Math.round(feet)][(zs / 2) - czp];
+		    	blockeye = space[xsh - bxp][ysh - Math.round(yp)][zsh - czp];
+		    	blockfeet = space[xsh - bxp][ysh - Math.round(feet)][zsh - czp];
 
 		    	if (((blockeye != 0) && (blockeye != 6) && (blockeye != 14) && (blockeye != 20) && (blockeye != 21) && (blockeye != 22) && (blockeye != 23) && (blockeye != 26) && (blockeye != 27) && (blockeye != 28) && (blockeye != 30))
 		    		|| ((blockfeet != 0) && (blockfeet != 6) && (blockfeet != 14) && (blockfeet != 20) && (blockfeet != 21) && (blockfeet != 22) && (blockfeet != 23) && (blockfeet != 26) && (blockfeet != 27) && (blockfeet != 28) && (blockfeet != 30)))
@@ -1172,8 +1481,8 @@ public class Blocky
 
 		    		int cxp = Math.round(nxp);
 
-			    	blockeye = space[(xs / 2) - cxp][(ys / 2) - Math.round(yp)][(zs / 2) - bzp];
-			    	blockfeet = space[(xs / 2) - cxp][(ys / 2) - Math.round(feet)][(zs / 2) - bzp];
+			    	blockeye = space[xsh - cxp][ysh - Math.round(yp)][zsh - bzp];
+			    	blockfeet = space[xsh - cxp][ysh - Math.round(feet)][zsh - bzp];
 
 			    	if (((blockeye != 0) && (blockeye != 6) && (blockeye != 14) && (blockeye != 20) && (blockeye != 21) && (blockeye != 22) && (blockeye != 23) && (blockeye != 26) && (blockeye != 27) && (blockeye != 28) && (blockeye != 30))
 			    		|| ((blockfeet != 0) && (blockfeet != 6) && (blockfeet != 14) && (blockfeet != 20) && (blockfeet != 21) && (blockfeet != 22) && (blockfeet != 23) && (blockfeet != 26) && (blockfeet != 27) && (blockfeet != 28) && (blockfeet != 30)))
@@ -1197,34 +1506,34 @@ public class Blocky
 		}
 
 		// Bounds checks
-		if (xp > (xs / 2) - 1)
+		if (xp > xsh - 1)
 		{
-			xp = (xs / 2) - 1;
+			xp = xsh - 1;
 		}
 
-		if (xp < -(xs / 2) + 1)
+		if (xp < -xsh + 1)
 		{
-			xp = -(xs / 2) + 1;
+			xp = -xsh + 1;
 		}
 
-		if (yp > (ys / 2) - 1)
+		if (yp > ysh - 1)
 		{
-			yp = (ys / 2) - 1;
+			yp = ysh - 1;
 		}
 
-		if (yp < -(ys / 2) + 1)
+		if (yp < -ysh + 1)
 		{
-			yp = -(ys / 2) + 1;
+			yp = -ysh + 1;
 		}
 
-		if (zp > (zs / 2) - 1)
+		if (zp > zsh - 1)
 		{
-			zp = (zs / 2) - 1;
+			zp = zsh - 1;
 		}
 
-		if (zp < -(zs / 2) + 1)
+		if (zp < -zsh + 1)
 		{
-			zp = -(zs / 2) + 1;
+			zp = -zsh + 1;
 		}
 
 		// Jump
@@ -1242,7 +1551,7 @@ public class Blocky
 
 	    	float feet = yp + pheight;
 
-	    	byte block = space[(xs / 2) - Math.round(xp)][(ys / 2) - Math.round(feet)][(zs / 2) - Math.round(zp)];
+	    	byte block = space[xsh - Math.round(xp)][ysh - Math.round(feet)][zsh - Math.round(zp)];
 
 	    	if ((block != 0) && (block != 6) && (block != 14) && (block != 20) && (block != 21) && (block != 22) && (block != 23)
 	    		&& (block != 26) && (block != 27) && (block != 28) && (block != 30))
@@ -1253,22 +1562,6 @@ public class Blocky
 	    	}
 
 		}
-//		if (Keyboard.isKeyDown(Keyboard.KEY_LCONTROL))
-//		{
-//	    	yp += (0.01f * delta);
-//
-//	    	float feet = yp + pheight;
-//
-//	    	byte block = space[(xs / 2) - Math.round(xp)][(ys / 2) - Math.round(feet)][(zs / 2) - Math.round(zd)];
-//
-//	    	System.out.println(((xs / 2) - Math.round(xp)) + "," + ((ys / 2) - Math.round(feet)) + "," + ((zs / 2) - Math.round(zd)) + "," + block);
-//	    	if ((block != 0) && (block != 6) && (block != 14) && (block != 26))
-//	    	{
-//	    		feet = Math.round(feet);
-//	    		yp = feet - pheight;
-//	    	}
-//
-//		}
 
 		//TODO
 		camera.setPitch(xa);
@@ -1276,6 +1569,14 @@ public class Blocky
 		camera.setPositionX(xp);
 		camera.setPositionY(yp);
 		camera.setPositionZ(zp);
+
+		//TODO
+		if (client != null)
+		{
+			//TODO
+			player.setPosition(new Vector3f(-xp, -(yp + pheight + 0.5f), -zp));
+			player.setRotation(new Vector3f(ya, (180f - xa), 0));
+		}
 
 		//TODO
 		while (Mouse.next() == true)
@@ -1289,8 +1590,24 @@ public class Blocky
 
 				if (pb != null)
 				{
-					generator.updateBlock(renderer, pb, (byte) 0, worldLight);
-					changedBlockList.add(new Vector4f(pb.x, pb.y, pb.z, 0));
+					Vector4f cb = new Vector4f(pb.x, pb.y, pb.z, 0);
+
+					//TODO
+					if (client != null)
+					{
+						//TODO
+						changedBlockList.add(cb);
+					}
+
+					//TODO
+					if ((client == null) || (server != null))
+					{
+						//TODO
+						unsavedBlockList.add(cb);
+					}
+
+					//TODO
+					generator.updateBlock(pb, (byte) 0, true, worldLight);
 				}
 
 			}
@@ -1307,12 +1624,6 @@ public class Blocky
 					//TODO
 					if ((settings.getBlockMode() == 1) || (settings.getBlockMode() == 2) || (settings.getBlockMode() == 3))
 					{
-						int xsh, ysh, zsh;
-
-						xsh = (xs / 2);
-						ysh = (ys / 2);
-						zsh = (zs / 2);
-
 						vertexBuffer.clear();
 						indexBuffer.clear();
 						Mesh m = new Mesh(Mesh.MeshType.MODEL, false, vertexBuffer, indexBuffer);
@@ -1358,8 +1669,35 @@ public class Blocky
 					}
 					else
 					{
-						generator.updateBlock(renderer, pb, handblock, worldLight);
-						changedBlockList.add(new Vector4f(pb.x, pb.y, pb.z, handblock));
+						Vector4f cb = new Vector4f(pb.x, pb.y, pb.z, handblock);
+
+						//TODO
+						if (client != null)
+						{
+							//TODO
+							changedBlockList.add(cb);
+						}
+
+						//TODO
+						if ((client == null) || (server != null))
+						{
+							//TODO
+							unsavedBlockList.add(cb);
+						}
+
+						//TODO
+						generator.updateBlock(pb, handblock, true, worldLight);
+
+						//TODO
+						if (handblock == 49)
+						{
+							infectionBlockPos = pb;
+						}
+
+						if (handblock == 51)
+						{
+							plantBlockPos = pb;
+						}
 					}
 
 				}
@@ -1390,9 +1728,9 @@ public class Blocky
 		for (int i = 0; i < 10; i++)
 		{
 			// Get block under ray
-			x = (xs / 2) + Math.round(rayPosition.x);
-			y = (ys / 2) + Math.round(rayPosition.y);
-			z = (zs / 2) + Math.round(rayPosition.z);
+			x = xsh + Math.round(rayPosition.x);
+			y = ysh + Math.round(rayPosition.y);
+			z = zsh + Math.round(rayPosition.z);
 
 			if ((y < (ys - 1)) && (y > 0)
 				&& (z < (zs - 1)) && (z > 0)
@@ -1409,9 +1747,9 @@ public class Blocky
 			}
 
 	    	// Advance ray
-	    	rayPosition.x -= rayDirection.x / 2;
-	    	rayPosition.y -= rayDirection.y / 2;
-	    	rayPosition.z -= rayDirection.z / 2;
+	    	rayPosition.x -= rayDirection.x / 2.0f;
+	    	rayPosition.y -= rayDirection.y / 2.0f;
+	    	rayPosition.z -= rayDirection.z / 2.0f;
 		}
 
 		return null;
@@ -1440,9 +1778,9 @@ public class Blocky
 		for (int i = 0; i < 10; i++)
 		{
 			// Get block under ray
-			x = (xs / 2) + Math.round(rayPosition.x);
-			y = (ys / 2) + Math.round(rayPosition.y);
-			z = (zs / 2) + Math.round(rayPosition.z);
+			x = xsh + Math.round(rayPosition.x);
+			y = ysh + Math.round(rayPosition.y);
+			z = zsh + Math.round(rayPosition.z);
 
 			if ((y < (ys - 1)) && (y > 0)
 				&& (z < (zs - 1)) && (z > 0)
@@ -1461,9 +1799,9 @@ public class Blocky
 			}
 
 	    	// Advance ray
-	    	rayPosition.x -= rayDirection.x / 2;
-	    	rayPosition.y -= rayDirection.y / 2;
-	    	rayPosition.z -= rayDirection.z / 2;
+	    	rayPosition.x -= rayDirection.x / 2.0f;
+	    	rayPosition.y -= rayDirection.y / 2.0f;
+	    	rayPosition.z -= rayDirection.z / 2.0f;
 		}
 
 		return null;
@@ -1504,6 +1842,10 @@ public class Blocky
 		long lastFps;
 		double timeDiff;
 		long fpsDiff;
+		int infectionBlockDirection;
+		int plantBlockDirection;
+		byte blockType1;
+		byte blockType2;
 
 		lastTime = getTime();
 		lastFps = fps;
@@ -1522,6 +1864,221 @@ public class Blocky
 			//TODO
 			counterOverlay.setValue((int) ((fpsDiff * 1000d) / timeDiff));
 
+			//TODO
+			if (plantBlockPos != null)
+			{
+				//TODO - Select Direction
+				plantBlockDirection = (int)(Math.random() * 9);
+				
+				//TODO - Set New Pos
+				if (plantBlockDirection == 0)
+				{
+					plantBlockPos.z += 1;
+				}
+				else if (plantBlockDirection == 1)
+				{
+					plantBlockPos.z -= 1;
+				}
+				else if (plantBlockDirection == 2)
+				{
+					plantBlockPos.x += 1;
+				}
+				else if (plantBlockDirection == 3)
+				{
+					plantBlockPos.x -= 1;
+				}
+				else if (plantBlockDirection == 4)
+				{
+					plantBlockPos.y += 1;
+				}
+				else if (plantBlockDirection == 5)
+				{
+					plantBlockPos.y -= 1;
+				}
+				else if (plantBlockDirection == 6)
+				{
+					plantBlockPos.y += 1;
+				}
+				else if (plantBlockDirection == 7)
+				{
+					plantBlockPos.y += 1;
+				}
+				else if (plantBlockDirection == 8)
+				{
+					plantBlockPos.y += 1;
+				}
+
+				//TODO - Get Block At New Pos
+				blockType2 = space[(int)plantBlockPos.x][(int)plantBlockPos.y][(int)plantBlockPos.z];
+				
+				//TODO - If Not Air -> Change Block
+				if (blockType2 == 0)
+				{
+					Vector4f cb = new Vector4f(plantBlockPos.x, plantBlockPos.y, plantBlockPos.z, 50);
+
+					//TODO
+					if (client != null)
+					{
+						//TODO
+						changedBlockList.add(cb);
+					}
+
+					//TODO
+					if ((client == null) || (server != null))
+					{
+						//TODO
+						unsavedBlockList.add(cb);
+					}
+
+					//TODO
+					generator.updateBlock(plantBlockPos, (byte)50, true, worldLight);
+				}
+				
+			}
+			
+			//TODO
+			if (infectionBlockPos != null)
+			{
+				//TODO - Select Direction
+				infectionBlockDirection = (int)(Math.random() * 10);
+				
+				//TODO - Set New Pos
+				if (infectionBlockDirection == 0)
+				{
+					infectionBlockPos.z += 1;
+				}
+				else if (infectionBlockDirection == 1)
+				{
+					infectionBlockPos.z -= 1;
+				}
+				else if (infectionBlockDirection == 2)
+				{
+					infectionBlockPos.x += 1;
+				}
+				else if (infectionBlockDirection == 3)
+				{
+					infectionBlockPos.x -= 1;
+				}
+				else if (infectionBlockDirection == 4)
+				{
+					infectionBlockPos.y += 1;
+				}
+				else if (infectionBlockDirection == 5)
+				{
+					infectionBlockPos.y -= 1;
+				}
+				else if (infectionBlockDirection == 6)
+				{
+					infectionBlockPos.z += 1;
+					infectionBlockPos.x += 1;
+				}
+				else if (infectionBlockDirection == 7)
+				{
+					infectionBlockPos.z -= 1;
+					infectionBlockPos.x -= 1;
+				}
+				else if (infectionBlockDirection == 8)
+				{
+					infectionBlockPos.z += 1;
+					infectionBlockPos.x -= 1;
+				}
+				else if (infectionBlockDirection == 9)
+				{
+					infectionBlockPos.z -= 1;
+					infectionBlockPos.x += 1;
+				}
+
+				//TODO - Get Block At New Pos
+				blockType1 = space[(int)infectionBlockPos.x][(int)infectionBlockPos.y][(int)infectionBlockPos.z];
+				
+				//TODO - If Not Air -> Change Block
+				if ((blockType1 == 3) || (blockType1 == 54))
+				{
+					Vector4f cb = new Vector4f(infectionBlockPos.x, infectionBlockPos.y, infectionBlockPos.z, 54);
+
+					if (client != null)
+					{
+						//TODO
+						changedBlockList.add(cb);
+					}
+
+					//TODO
+					if ((client == null) || (server != null))
+					{
+						//TODO
+						unsavedBlockList.add(cb);
+					}
+
+					//TODO
+					generator.updateBlock(infectionBlockPos, (byte)54, true, worldLight);
+				}
+
+				else if ((blockType1 == 2) || (blockType1 == 53))
+				{
+					Vector4f cb = new Vector4f(infectionBlockPos.x, infectionBlockPos.y, infectionBlockPos.z, 53);
+
+					if (client != null)
+					{
+						//TODO
+						changedBlockList.add(cb);
+					}
+
+					//TODO
+					if ((client == null) || (server != null))
+					{
+						//TODO
+						unsavedBlockList.add(cb);
+					}
+
+					//TODO
+					generator.updateBlock(infectionBlockPos, (byte)53, true, worldLight);
+				}
+
+				else if ((blockType1 == 1) || (blockType1 == 52))
+				{
+					Vector4f cb = new Vector4f(infectionBlockPos.x, infectionBlockPos.y, infectionBlockPos.z, 52);
+
+					if (client != null)
+					{
+						//TODO
+						changedBlockList.add(cb);
+					}
+
+					//TODO
+					if ((client == null) || (server != null))
+					{
+						//TODO
+						unsavedBlockList.add(cb);
+					}
+
+					//TODO
+					generator.updateBlock(infectionBlockPos, (byte)52, true, worldLight);
+				}
+
+				else if (blockType1 != 0)
+				{
+					Vector4f cb = new Vector4f(infectionBlockPos.x, infectionBlockPos.y, infectionBlockPos.z, 49);
+
+					//TODO
+					if (client != null)
+					{
+						//TODO
+						changedBlockList.add(cb);
+					}
+
+					//TODO
+					if ((client == null) || (server != null))
+					{
+						//TODO
+						unsavedBlockList.add(cb);
+					}
+
+					//TODO
+					generator.updateBlock(infectionBlockPos, (byte)49, true, worldLight);
+				}
+				
+			}
+
 //			//TODO - picking
 //			Ray ray = renderer.pick(5);
 //			Vector3f rayPosition = ray.getPosition();
@@ -1533,11 +2090,11 @@ public class Blocky
 //
 //			for (int i = 0; i < 10; i++)
 //			{
-//		    	block = space[(xs / 2) + Math.round(rayPosition.x)][(ys / 2) + Math.round(rayPosition.y)][(zs / 2) + Math.round(rayPosition.z)];
+//		    	block = space[xsh + Math.round(rayPosition.x)][ysh + Math.round(rayPosition.y)][zsh + Math.round(rayPosition.z)];
 //
 //		    	if (block != 0)
 //		    	{
-//		    		System.out.print(block + "[" + ((xs / 2) + Math.round(rayPosition.x)) + "," + ((ys / 2) + Math.round(rayPosition.y)) + "," + ((zs / 2) + Math.round(rayPosition.z)) + "],");
+//		    		System.out.print(block + "[" + (xsh + Math.round(rayPosition.x)) + "," + (ysh + Math.round(rayPosition.y)) + "," + (zsh + Math.round(rayPosition.z)) + "],");
 //
 //			    	if ((block == 6) || (block == 14) || (block == 26))
 //			    	{
@@ -1586,7 +2143,10 @@ public class Blocky
 			lastFps = fps;
 
 			//TODO
-			saveChangedBlocks();
+			if (worldFile != null)
+			{
+				saveChangedBlocks();
+			}
 
 			try
 			{
@@ -1605,10 +2165,10 @@ public class Blocky
 	{
 
 		//TODO
-		while (changedBlockList.size() > 0)
+		while (unsavedBlockList.size() > 0)
 		{
 			//TODO
-			Vector4f v = changedBlockList.remove(0);
+			Vector4f v = unsavedBlockList.remove(0);
 
 			//TODO
 			try
@@ -1633,6 +2193,7 @@ public class Blocky
 		long etime;
 		long duration;
 		Actor actor;
+		long sleep;
 
 		last = 0;
 		stime = System.nanoTime();
@@ -1659,9 +2220,28 @@ public class Blocky
 
 			}
 
+			//TODO
+			if (client != null)
+			{
+
+				//TODO
+				try
+				{
+					client.sendPlayerData(player, changedBlockList);
+				}
+				catch (java.lang.Exception exception)
+				{
+					exception.printStackTrace();
+				}
+
+			}
+
 			try
 			{
-				Thread.sleep(32);
+				//TODO
+				sleep = 30 - duration;
+				sleep = (sleep < 0) ? 0 : sleep;
+				Thread.sleep(sleep);
 			}
 			catch (java.lang.Exception exception)
 			{
@@ -1672,6 +2252,256 @@ public class Blocky
 			stime = etime;
 		}
 
+	}
+
+	//TODO
+	public byte[][][] getSpace()
+	{
+		return space;
+	}
+
+	//TODO
+	public void addPlayerMeshes(
+		final Player player1)
+	{
+		// Local variables
+		Material[] materials;
+
+		//TODO
+		Mesh m = new Mesh(Mesh.MeshType.MODEL, false, new FloatBuffer(16 * 16 * 16 * 6 * 4 * 12), new ShortBuffer(16 * 16 * 16 * 6 * 4));
+
+		try
+		{
+			m.setTexture(playerTexture);
+		}
+		catch (java.lang.Exception exception)
+		{
+			exception.printStackTrace();
+		}
+
+		//TODO - head
+		materials = new Material[]
+		{
+			new Material(6 / 128f, 12 / 128f, 0 / 32f, 6 / 32f),
+			new Material(12 / 128f, 18 / 128f, 0 / 32f, 6 / 32f),
+			new Material(6 / 128f, 12 / 128f, 6 / 32f, 12 / 32f),
+			new Material(18 / 128f, 24 / 128f, 6 / 32f, 12 / 32f),
+			new Material(0 / 128f, 6 / 128f, 6 / 32f, 12 / 32f),
+			new Material(12 / 128f, 18 / 128f, 6 / 32f, 12 / 32f)
+		};
+
+		//TODO
+		Box.draw(m, 0.16875f, -0.16875f, 0.3375f, 0.0f, 0.16875f, -0.16875f,
+			materials, new float[] {127, 127, 127, 127, 127, 127, 127, 127},
+			//top, bottom, front, back, left, right
+			true, true, true, true, true, true);
+
+		//TODO
+		player1.setHeadMesh(m);
+
+		//TODO
+		m = new Mesh(Mesh.MeshType.MODEL, false, new FloatBuffer(16 * 16 * 16 * 6 * 4 * 12), new ShortBuffer(16 * 16 * 16 * 6 * 4));
+
+		try
+		{
+			m.setTexture(playerTexture);
+		}
+		catch (java.lang.Exception exception)
+		{
+			exception.printStackTrace();
+		}
+
+		//TODO - body
+		materials = new Material[]
+		{
+			new Material(6 / 128f, 14 / 128f, 12 / 32f, 16 / 32f),
+			new Material(14 / 128f, 22 / 128f, 12 / 32f, 16 / 32f),
+			new Material(6 / 128f, 14 / 128f, 16 / 32f, 32 / 32f),
+			new Material(18 / 128f, 26 / 128f, 16 / 32f, 32 / 32f),
+			new Material(2 / 128f, 6 / 128f, 16 / 32f, 32 / 32f),
+			new Material(14 / 128f, 18 / 128f, 16 / 32f, 32 / 32f)
+		};
+
+		//TODO
+		Box.draw(m, 0.225f, -0.225f, 1.49375f, 0.7875f, 0.1125f, -0.1125f,
+			materials, new float[] {127, 127, 127, 127, 127, 127, 127, 127},
+			//top, bottom, front, back, left, right
+			true, true, true, true, true, true);
+
+		//TODO - left arm
+		materials = new Material[]
+		{
+			new Material(36 / 128f, 40 / 128f, 14 / 32f, 18 / 32f),
+			new Material(40 / 128f, 44 / 128f, 14 / 32f, 18 / 32f),
+			new Material(36 / 128f, 40 / 128f, 18 / 32f, 32 / 32f),
+			new Material(44 / 128f, 48 / 128f, 18 / 32f, 32 / 32f),
+			new Material(32 / 128f, 36 / 128f, 18 / 32f, 32 / 32f),
+			new Material(40 / 128f, 44 / 128f, 18 / 32f, 32 / 32f)
+		};
+
+		//TODO
+		Box.draw(m, 0.45f - 0.05625f, 0.225f, 1.49375f, 0.70625f, 0.1125f - 0.05625f, -0.1125f + 0.05625f,
+			materials, new float[] {127, 127, 127, 127, 127, 127, 127, 127},
+			//top, bottom, front, back, left, right
+			true, true, true, true, true, true);
+
+		//TODO - right arm
+		materials = new Material[]
+		{
+			new Material(52 / 128f, 56 / 128f, 14 / 32f, 18 / 32f),
+			new Material(56 / 128f, 60 / 128f, 14 / 32f, 18 / 32f),
+			new Material(52 / 128f, 56 / 128f, 18 / 32f, 32 / 32f),
+			new Material(60 / 128f, 64 / 128f, 18 / 32f, 32 / 32f),
+			new Material(48 / 128f, 52 / 128f, 18 / 32f, 32 / 32f),
+			new Material(56 / 128f, 60 / 128f, 18 / 32f, 32 / 32f)
+		};
+
+		//TODO
+		Box.draw(m, -0.225f, -0.45f + 0.05625f, 1.49375f, 0.70625f, 0.1125f - 0.05625f, -0.1125f + 0.05625f,
+			materials, new float[] {127, 127, 127, 127, 127, 127, 127, 127},
+			//top, bottom, front, back, left, right
+			true, true, true, true, true, true);
+
+		//TODO - left leg
+		materials = new Material[]
+		{
+			new Material(84 / 128f, 88 / 128f, 14 / 32f, 18 / 32f),
+			new Material(88 / 128f, 92 / 128f, 14 / 32f, 18 / 32f),
+			new Material(84 / 128f, 88 / 128f, 18 / 32f, 32 / 32f),
+			new Material(92 / 128f, 96 / 128f, 18 / 32f, 32 / 32f),
+			new Material(80 / 128f, 84 / 128f, 18 / 32f, 32 / 32f),
+			new Material(88 / 128f, 92 / 128f, 18 / 32f, 32 / 32f)
+		};
+
+		//TODO
+		Box.draw(m, 0.225f, 0.0f + 0.005625f, 0.7875f, 0.0f, 0.1125f, -0.1125f,
+			materials, new float[] {127, 127, 127, 127, 127, 127, 127, 127},
+			//top, bottom, front, back, left, right
+			true, true, true, true, true, true);
+
+		//TODO - right leg
+		materials = new Material[]
+		{
+			new Material(84 / 128f, 88 / 128f, 14 / 32f, 18 / 32f),
+			new Material(88 / 128f, 92 / 128f, 14 / 32f, 18 / 32f),
+			new Material(84 / 128f, 88 / 128f, 18 / 32f, 32 / 32f),
+			new Material(92 / 128f, 96 / 128f, 18 / 32f, 32 / 32f),
+			new Material(80 / 128f, 84 / 128f, 18 / 32f, 32 / 32f),
+			new Material(88 / 128f, 92 / 128f, 18 / 32f, 32 / 32f)
+		};
+
+		//TODO
+		Box.draw(m, 0.0f - 0.005625f, -0.225f, 0.7875f, 0.0f, 0.1125f, -0.1125f,
+			materials, new float[] {127, 127, 127, 127, 127, 127, 127, 127},
+			//top, bottom, front, back, left, right
+			true, true, true, true, true, true);
+
+		//TODO
+		player1.setBodyMesh(m);
+	}
+
+	public void updatePlayerData(
+		final int id,
+		final Vector3f position,
+		final Vector3f rotation)
+	{
+		// Local variables
+		Player otherPlayer;
+		MeshSet meshSet;
+		java.util.List<Mesh> addMeshList;
+
+		//TODO
+		otherPlayer = playerMap.get(id);
+
+		//TODO
+		if (otherPlayer == null)
+		{
+			//TODO
+			otherPlayer = new Player();
+			otherPlayer.setId(id);
+			otherPlayer.setPosition(position);
+			otherPlayer.setRotation(rotation);
+
+			//TODO
+			otherPlayer.setHeadMesh(player.getHeadMesh().clone());
+
+			//TODO
+			otherPlayer.setBodyMesh(player.getBodyMesh().clone());
+
+			//TODO
+//			addPlayerMeshes(otherPlayer);
+
+			//TODO
+			playerMap.put(otherPlayer.getId(), otherPlayer);
+
+			//TODO
+			meshSet = new MeshSet();
+			addMeshList = meshSet.getAddMeshList();
+
+			//TODO
+			addMeshList.add(otherPlayer.getHeadMesh());
+			addMeshList.add(otherPlayer.getBodyMesh());
+
+			//TODO
+			generator.addChangedMeshes(meshSet);
+
+			//TODO
+			System.out.println("Player[" + id + "] added.");
+		}
+		else
+		{
+			//TODO
+			otherPlayer.setPosition(position);
+			otherPlayer.setRotation(rotation);
+		}
+
+	}
+
+	public void removePlayer(
+		final int id)
+	{
+		// Local variables
+		Player otherPlayer;
+		MeshSet meshSet;
+		java.util.List<Mesh> removeMeshList;
+
+		//TODO
+		otherPlayer = playerMap.remove(id);
+
+		//TODO
+		if (otherPlayer != null)
+		{
+			//TODO
+			meshSet = new MeshSet();
+			removeMeshList = meshSet.getRemoveMeshList();
+
+			//TODO
+			removeMeshList.add(otherPlayer.getHeadMesh());
+			removeMeshList.add(otherPlayer.getBodyMesh());
+
+			//TODO
+			generator.addChangedMeshes(meshSet);
+
+			//TODO
+			System.out.println("Player[" + id + "] removed.");
+		}
+
+	}
+
+	public void updateBlock(
+		final Vector3f position,
+		final byte newBlock)
+	{
+
+		//TODO
+		if (server != null)
+		{
+			//TODO
+			unsavedBlockList.add(new Vector4f(position.x, position.y, position.z, newBlock));
+		}
+
+		//TODO
+		generator.updateBlock(position, newBlock, false, worldLight);
 	}
 
 	public static void main(String[] argv)

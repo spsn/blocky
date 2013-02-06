@@ -1,20 +1,39 @@
 package ge.demo.terrain;
 import org.lwjgl.util.vector.Vector3f;
-
 import ge.demo.game.Settings;
 import ge.demo.shape.Shape;
+import ge.framework.buffer.BufferManager;
 import ge.framework.buffer.FloatBuffer;
 import ge.framework.buffer.ShortBuffer;
 import ge.framework.mesh.Mesh;
 import ge.framework.overlay.ProgressBarOverlay;
 import ge.framework.render.Counters;
 import ge.framework.render.Renderer;
+import ge.framework.util.Semaphore;
 
 public class Generator
 {
-	private int xs;
-	private int ys;
-	private int zs;
+
+	//TODO
+	public class GenerateThread extends java.lang.Thread
+	{
+		private Generator generator;
+
+		public GenerateThread(
+			final Generator generator)
+		{
+			this.generator = generator;
+		}
+
+		public void run()
+		{
+			generator.generateMeshes();
+		}
+
+	}
+
+	private int xs, ys, zs;
+	private int xsh, ysh, zsh;
 	private byte[][][] space;
 	private byte[][][] light;
 	private Shape[] blocks;
@@ -28,6 +47,11 @@ public class Generator
 	private ShortBuffer indexBuffer2;
 
 	private float factor;
+
+	private BufferManager bufferManager;
+	private Semaphore generateSemaphore;
+	private java.util.List<java.util.Set<Region>> pendingRegionList;
+	private java.util.List<MeshSet> changedMeshList;
 
 	/**
 	 * Constructor.
@@ -51,10 +75,31 @@ public class Generator
 		this.blocks = blocks;
 		this.counters = counters;
 
+		xsh = (xs >> 1);
+		ysh = (ys >> 1);
+		zsh = (zs >> 1);
+
 		vertexBuffer1 = new FloatBuffer(16 * 16 * 16 * 6 * 4 * 12);
 		vertexBuffer2 = new FloatBuffer(16 * 16 * 16 * 6 * 4 * 12);
 		indexBuffer1 = new ShortBuffer(16 * 16 * 16 * 6 * 4);
 		indexBuffer2 = new ShortBuffer(16 * 16 * 16 * 6 * 4);
+
+		//TODO
+		bufferManager =  new BufferManager();
+
+		//TODO
+		generateSemaphore = new Semaphore();
+
+		//TODO
+		pendingRegionList = new java.util.ArrayList<java.util.Set<Region>>();
+
+		//TODO
+		changedMeshList = new java.util.ArrayList<MeshSet>();
+
+		//TODO
+		GenerateThread generateThread = new GenerateThread(this);
+		generateThread.setDaemon(true);
+		generateThread.start();
 	}
 
 	public void generateTerrain2()
@@ -783,17 +828,46 @@ public class Generator
 	public void setLighting(
 		final int x,
 		final int z,
-		final byte worldLight)
+		final byte topLight)
+	{
+		setLighting(x, (ys - 1), z, topLight, false);
+	}
+
+	//TODO
+	public void setLighting(
+		final int x,
+		final int y,
+		final int z,
+		final byte topLight)
+	{
+		setLighting(x, y, z, topLight, false);
+	}
+
+	//TODO
+	public void setLighting(
+		final int x,
+		final int y,
+		final int z,
+		final byte topLight,
+		final boolean stopWhenSolid)
 	{
 		// Local variables
 		byte level;
+		boolean solid;
 		byte block;
 
-		level = worldLight;
+		level = topLight;
 
-		for (int yi = (ys - 1); yi >= 0; yi--)
+		solid = false;
+
+		for (int yi = y; yi >= 0; yi--)
 		{
 			light[x][yi][z] = level;
+
+			if ((solid == true) && (stopWhenSolid == true))
+			{
+				break;
+			}
 
 			block = space[x][yi][z];
 
@@ -832,9 +906,18 @@ public class Generator
 			else if ((block == 20) || (block == 21) || (block == 22) || (block == 23) || (block == 30))
 			{
 			}
+			// Glass
+			else if (block == 33)
+			{
+			}
+			// Pole
+			else if (block == 35)
+			{
+			}
 			else if (block != 0)
 			{
-				level = 8;
+				level = 16;
+				solid = true;
 			}
 
 		}
@@ -843,17 +926,15 @@ public class Generator
 
 	//TODO
 	public void updateBlock(
-		final Renderer renderer,
 		final Vector3f position,
 		final byte newBlock,
+		final boolean ownBlock,
 		final byte worldLight)
 	{
 		// Local variables
 		int x, y, z;
 		byte oldBlock;
 		java.util.Set<Region> regionSet;
-		java.util.Iterator<Region> iterator;
-		Region region;
 
 		//TODO
 		x = (int) position.getX();
@@ -916,7 +997,7 @@ public class Generator
 		}
 
 		//TODO !!!!!!!
-		setLighting(x, z, worldLight);
+		setLighting(x, y, z, light[x][y][z], true);
 
 		//TODO
 		regionSet = new java.util.HashSet<Region>();
@@ -984,16 +1065,28 @@ public class Generator
 
 		}
 
-		for (iterator = regionSet.iterator(); iterator.hasNext() == true;)
+		synchronized (pendingRegionList)
 		{
-			region = iterator.next();
 
 			//TODO
-			updateRegion(renderer, region);
+			if (ownBlock == true)
+			{
+				//TODO
+				pendingRegionList.add(0, regionSet);
+			}
+			else
+			{
+				//TODO
+				pendingRegionList.add(regionSet);
+			}
+
+			//TODO
+			generateSemaphore.post();
 		}
 
 	}
 
+	//TODO - corners where 3 regions meet !!!
 	private void getAffectedRegions(
 		final int x,
 		final int y,
@@ -1005,13 +1098,13 @@ public class Generator
 		int ex, ey, ez;
 
 		//TODO
-		rx = x / 16;
-		ry = y / 16;
-		rz = z / 16;
+		rx = x >> 4;
+		ry = y >> 4;
+		rz = z >> 4;
 
-		ex = x % 16;
-		ey = y % 16;
-		ez = z % 16;
+		ex = x & 15;
+		ey = y & 15;
+		ez = z & 15;
 
 		//TODO
 		regionSet.add(getRegion(rx, ry, rz));
@@ -1060,30 +1153,6 @@ public class Generator
 
 	}
 
-	private void updateRegion(
-		final Renderer renderer,
-		final Region region)
-	{
-		// Remove meshes for region
-		renderer.removeMesh(region.getMesh1());
-		renderer.removeMesh(region.getMesh2());
-
-		// Generate new meshes for region
-		generateMeshes(region);
-
-		// Add meshes for region
-		if (region.getMesh1().getVertexCount() > 0)
-		{
-			renderer.addMesh(region.getMesh1());
-		}
-
-		if (region.getMesh2().getVertexCount() > 0)
-		{
-			renderer.addMesh(region.getMesh2());
-		}
-
-	}
-
 	private Region getRegion(
 		final int x,
 		final int y,
@@ -1098,49 +1167,42 @@ public class Generator
 		return region;
 	}
 
-	private Region getRegionFromBlock(
-		final int x,
-		final int y,
-		final int z)
-	{
-		// Local variables
-		Region region;
-
-		// Get region
-		region = regions[x / 16][y / 16][z / 16];
-
-		return region;
-	}
-
 	public void generateMeshes(
 		final Renderer renderer,
 		final ProgressBarOverlay s2)
 	{
 		// Local variables
-		int x1, x2, y1, y2, z1, z2;
+		int rx, ry, rz, x1, x2, y1, y2, z1, z2;
 		Region region;
 
 		long st = System.currentTimeMillis();
 
-		regions = new Region[xs / 16][ys / 16][zs / 16];
-		int total = (xs / 16) * (ys / 16) * (zs / 16);
+		rx = xs >> 4;
+		ry = ys >> 4;
+		rz = zs >> 4;
+
+		regions = new Region[rx][ry][rz];
+		int total = rx * ry * rz;
 		int count = 0;
 
-		for (int i = 0; i < (xs / 16); i++)
+		x1 = -16;
+		for (int i = 0; i < rx; i++)
 		{
-			x1 = (i * 16);
+			x1 += 16;
 			x2 = (x1 + 16);
 
-			for (int j = 0; j < (ys / 16); j++)
+			y1 = -16;
+			for (int j = 0; j < ry; j++)
 			{
-				y1 = (j * 16);
+				y1 += 16;
 				y2 = (y1 + 16);
 
-				for (int k = 0; k < (zs / 16); k++)
+				z1 = -16;
+				for (int k = 0; k < rz; k++)
 				{
 					counters.regionCount++;
 
-					z1 = (k * 16);
+					z1 += 16;
 					z2 = (z1 + 16);
 
 					region = new Region(x1, x2, y1, y2, z1, z2);
@@ -1148,7 +1210,7 @@ public class Generator
 					regions[i][j][k] = region;
 
 					//TODO - gen !!!
-					generateMeshes(region);
+					generateMeshes(region, vertexBuffer1, vertexBuffer2, indexBuffer1, indexBuffer2);
 
 					//TODO
 					if (region.isVisible() == true)
@@ -1173,12 +1235,12 @@ public class Generator
 
 				}
 
-				//TODO
-				count += (zs / 16);
-				s2.setValue(((count * 100) / total), 100);
-				renderer.renderOverlays();
 			}
 
+			//TODO
+			count += (ry * rz);
+			s2.setValue(((count * 100) / total), 100);
+			renderer.renderOverlays();
 		}
 
 		long et = System.currentTimeMillis();
@@ -1186,14 +1248,114 @@ public class Generator
 		System.out.println("generateMeshes = " + (et - st));
 	}
 
+	public void generateMeshes()
+	{
+		//TODO
+		MeshSet meshSet;
+		java.util.List<Mesh> removeMeshList;
+		java.util.List<Mesh> addMeshList;
+		java.util.Set<Region> regionSet;
+		java.util.Iterator<Region> iterator;
+		Region region;
+		FloatBuffer vBuffer1;
+		FloatBuffer vBuffer2;
+		ShortBuffer iBuffer1;
+		ShortBuffer iBuffer2;
+
+		//TODO
+		while (true)
+		{
+
+			try
+			{
+				//TODO
+				generateSemaphore.waitFor();
+
+				//TODO
+				meshSet = new MeshSet();
+				removeMeshList = meshSet.getRemoveMeshList();
+				addMeshList = meshSet.getAddMeshList();
+
+				//TODO
+				synchronized (pendingRegionList)
+				{
+					regionSet = pendingRegionList.remove(0);
+				}
+
+				//TODO
+				for (iterator = regionSet.iterator(); iterator.hasNext() == true;)
+				{
+					region = iterator.next();
+		
+					//TODO
+					if (region.getMesh1().getVertexCount() > 0)
+					{
+						removeMeshList.add(region.getMesh1());
+					}
+
+					if (region.getMesh2().getVertexCount() > 0)
+					{
+						removeMeshList.add(region.getMesh2());
+					}
+
+					//TODO
+					vBuffer1 = (FloatBuffer) bufferManager.getBuffer(FloatBuffer.class, 16 * 16 * 16 * 6 * 4 * 12);
+					vBuffer2 = (FloatBuffer) bufferManager.getBuffer(FloatBuffer.class, 16 * 16 * 16 * 6 * 4 * 12);
+					iBuffer1 = (ShortBuffer) bufferManager.getBuffer(ShortBuffer.class, 16 * 16 * 16 * 6 * 4);
+					iBuffer2 = (ShortBuffer) bufferManager.getBuffer(ShortBuffer.class, 16 * 16 * 16 * 6 * 4);
+
+					// Generate new meshes for region
+					generateMeshes(region, vBuffer1, vBuffer2, iBuffer1, iBuffer2);
+
+					//TODO
+					if (region.getMesh1().getVertexCount() > 0)
+					{
+						addMeshList.add(region.getMesh1());
+					}
+					else
+					{
+						clearMesh(region.getMesh1());
+					}
+
+					if (region.getMesh2().getVertexCount() > 0)
+					{
+						addMeshList.add(region.getMesh2());
+					}
+					else
+					{
+						clearMesh(region.getMesh2());
+					}
+
+				}
+
+				//TODO
+				synchronized (changedMeshList)
+				{
+					changedMeshList.add(meshSet);
+				}
+
+			}
+			catch (java.lang.Exception exception)
+			{
+				//TODO
+				exception.printStackTrace();
+			}
+
+		}
+
+	}
+
 	public void generateMeshes(
-		final Region region)
+		final Region region,
+		final FloatBuffer vertexBuffer1,
+		final FloatBuffer vertexBuffer2,
+		final ShortBuffer indexBuffer1,
+		final ShortBuffer indexBuffer2)
 	{
 		// Local variables
 		Mesh mesh1;
 		Mesh mesh2;
 		Mesh mesh;
-		int xsh, ysh, zsh;
 
 		byte[][] space_x;
 		byte[] space_x_y;
@@ -1246,10 +1408,6 @@ public class Generator
 		byte l_xm_ym_zp;
 		byte l_x_ym_zp;
 		byte l_xp_ym_zp;
-
-		xsh = (xs / 2);
-		ysh = (ys / 2);
-		zsh = (zs / 2);
 
 		vertexBuffer1.clear();
 		vertexBuffer2.clear();
@@ -1430,7 +1588,8 @@ public class Generator
 								lights = new float[] {l, l, l, l, l, l, l, l};
 							}
 
-							if ((space_x_y_z == 6) || (space_x_y_z == 14) || (space_x_y_z == 26) || (space_x_y_z == 27) || (space_x_y_z == 28))
+							if ((space_x_y_z == 6) || (space_x_y_z == 14) || (space_x_y_z == 26) || (space_x_y_z == 27) || (space_x_y_z == 28)
+								|| (space_x_y_z == 55) || (space_x_y_z == 56) || (space_x_y_z == 57) || (space_x_y_z == 58) || (space_x_y_z == 59) || (space_x_y_z == 60))
 							{
 								mesh = mesh2;
 							}
@@ -1456,6 +1615,15 @@ public class Generator
 
 				}
 
+				//TODO
+				try
+				{
+					Thread.sleep(0);
+				}
+				catch (java.lang.Exception exception)
+				{
+				}
+
 			}
 
 		}
@@ -1466,7 +1634,8 @@ public class Generator
 		final byte block,
 		final byte other)
 	{
-		if ((((block == 6) || (block == 14) || (block == 26) || (block == 27) || (block == 28)) && (block == other))
+		if ((((block == 6) || (block == 14) || (block == 26) || (block == 27) || (block == 28) || (block == 33)
+			|| (block == 33) || (block == 55) || (block == 56) || (block == 57) || (block == 58) || (block == 59) || (block == 60)) && (block == other))
 			|| ((block == 6) && (other == 26)) || ((block == 26) && (other == 6)) || ((block == 27) && (other == 6))
 			|| ((block == 27) && (other == 26)) || ((block == 28) && (other == 6)) || ((block == 28) && (other == 26))
 			|| ((block == 28) && (other == 27)))
@@ -1476,7 +1645,10 @@ public class Generator
 
 		return ((other == 0) || (other == 6) || (other == 9) ||  (other == 11) || (other == 14) || (other == 17)
 			|| (other == 20) || (other == 21) || (other == 22) || (other == 23) || (other == 24) || (other == 25)
-			|| (other == 26) || (other == 27) || (other == 28) || (other == 30));
+			|| (other == 26) || (other == 27) || (other == 28) || (other == 30) || (other == 33) || (other == 34)
+			|| (other == 35) || (other == 36) || (other == 37) || (other == 38) || (other == 39) || (other == 41)
+			|| (other == 42) || (other == 43) || (other == 44) || (other == 45) || (other == 46) || (other == 47)
+			|| (other == 48) || (other == 55) || (other == 56) || (other == 57) || (other == 58) || (other == 59) || (other == 60));
 	}
 
 	private byte getSpace(
@@ -1493,6 +1665,87 @@ public class Generator
 		space3 = space2[z];
 
 		return space3;
+	}
+
+	//TODO
+	public void applyChangedMeshes(
+		final Renderer renderer)
+	{
+		//TODO
+		MeshSet meshSet;
+		java.util.List<Mesh> meshList;
+
+		//TODO
+		if (changedMeshList.size() > 0)
+		{
+
+			//TODO
+			synchronized (changedMeshList)
+			{
+				meshSet = changedMeshList.remove(0);
+			}
+
+			//TODO
+			meshList = meshSet.getRemoveMeshList();
+
+			//TODO
+			if (meshList.size() > 0)
+			{
+
+				//TODO
+				for (int j = 0; j < meshList.size(); j++)
+				{
+					renderer.removeMesh(meshList.get(j));
+				}
+
+				//TODO
+				meshList.clear();
+			}
+
+			//TODO
+			meshList = meshSet.getAddMeshList();
+
+			//TODO
+			if (meshList.size() > 0)
+			{
+
+				//TODO
+				for (int j = 0; j < meshList.size(); j++)
+				{
+					//TODO
+					renderer.addMesh(meshList.get(j));
+
+					//TODO
+					clearMesh(meshList.get(j));
+				}
+
+				//TODO
+				meshList.clear();
+			}
+
+		}
+
+	}
+
+	//TODO
+	public void addChangedMeshes(
+		final MeshSet meshSet)
+	{
+
+		//TODO
+		synchronized (changedMeshList)
+		{
+			changedMeshList.add(meshSet);
+		}
+
+	}
+
+	//TODO
+	private void clearMesh(
+		final Mesh mesh)
+	{
+		bufferManager.releaseBuffer(mesh.getVertexBuffer());
+		bufferManager.releaseBuffer(mesh.getIndexBuffer());
 	}
 
 }

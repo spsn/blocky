@@ -85,6 +85,15 @@ public class Mesh extends RenderBuffer
 	}
 
 	/**
+	 * Constructor.
+	 */
+	private Mesh()
+	{
+		// Call super constructor
+		super();
+	}
+
+	/**
 	 * Get mesh type.
 	 * @return The mesh type
 	 */
@@ -312,6 +321,33 @@ public class Mesh extends RenderBuffer
 		final short indexCount)
 	{
 		this.indexCount = indexCount;
+	}
+
+	/**
+	 * Clone mesh.
+	 * @return The cloned mesh
+	 */
+	public Mesh clone()
+	{
+		// Local variables
+		Mesh mesh1;
+
+		// Clone mesh
+		mesh1 = new Mesh();
+		mesh1.meshType = meshType;
+		mesh1.deferred = deferred;
+		mesh1.vertexCount = vertexCount;
+		mesh1.indexCount = indexCount;
+		mesh1.indexOffset = indexOffset;
+		mesh1.indexOffsets = indexOffsets;
+		mesh1.vertexBuffer = vertexBuffer;
+		mesh1.indexBuffer = indexBuffer;
+		mesh1.texture = texture;
+		mesh1.position = position;
+		mesh1.rotation = rotation;
+		mesh1.boundingBox = boundingBox;
+
+		return mesh1;
 	}
 
 }

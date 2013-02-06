@@ -4,7 +4,7 @@ package ge.framework.buffer;
  * Float buffer.
  * @author GEF
  */
-public class FloatBuffer
+public class FloatBuffer extends Buffer
 {
 	// Capacity
 	private int capacity;

@@ -1,5 +1,7 @@
 package ge.framework.render;
 import ge.framework.mesh.Mesh;
+import ge.framework.profile.Profiler;
+import ge.framework.shader.Program;
 import ge.framework.util.Color;
 
 import org.newdawn.slick.opengl.Texture;
@@ -9,6 +11,9 @@ import org.newdawn.slick.opengl.Texture;
  */
 public abstract class Renderer
 {
+	// Wait for vsync indicator
+	protected boolean waitForVsync;
+
 	// Background color
 	protected Color backgroundColor;
 
@@ -32,6 +37,16 @@ public abstract class Renderer
 
 	// Viewing frustum
 	protected Frustum frustum;
+
+	// Current texture
+	protected Texture currentTexture;
+
+	// Current shader program
+	protected Program currentProgram;
+
+	//TODO
+	// Profiler
+	public Profiler profiler;
 
 	//TODO
 	// Counters
@@ -60,8 +75,22 @@ public abstract class Renderer
 		// Create viewing frustum
 		frustum = new Frustum();
 
+		// Create profiler
+		profiler = new Profiler();
+
 		// Create counters
 		counters = new Counters();
+	}
+
+	/**
+	 * Set wait for vsync indicator.
+	 * @param backgroundColor The wait for vsync indicator
+	 */
+	public void setWaitForVsync(
+		final boolean waitForVsync)
+	{
+		// Set wait for vsync indicator
+		this.waitForVsync = waitForVsync;
 	}
 
 	/**
@@ -201,5 +230,92 @@ public abstract class Renderer
 	 */
 	protected abstract void destroyMesh(
 		final Mesh mesh);
+
+	/**
+	 * Activate shader program.
+	 * The current shader program is deactivated before the new shader program is activated.
+	 * If the new shader program is the same as the current shader program then no action is taken.
+	 * @param program The shader program
+	 */
+	protected void activateProgram(
+		final Program program)
+	{
+
+		// New shader program is different from current shader program
+		if (program != currentProgram)
+		{
+
+//			// Current shader program defined?
+//			if (currentProgram != null)
+//			{
+//				// Deactivate current shader program
+//				currentProgram.deactivate();
+//
+//				//TODO
+//				profiler.measure(Profiler.DEACTIVATE_PROGRAM);
+//			}
+
+			// Activate new shader program
+			program.activate();
+
+			// Set current shader program
+			currentProgram = program;
+
+			//TODO
+			profiler.measure(Profiler.ACTIVATE_PROGRAM);
+		}
+
+	}
+
+	/**
+	 * Bind texture.
+	 * If the new texture is the same as the current texture then no action is taken.
+	 * @param texture The texture
+	 */
+	protected void bindTexture(
+		final Texture texture)
+	{
+		// Bind texture
+		bindTexture(texture, true);
+	}
+
+	/**
+	 * Bind texture.
+	 * If the new texture is the same as the current texture then no action is taken.
+	 * @param texture The texture
+	 */
+	protected void bindTexture(
+		final Texture texture,
+		final boolean profile)
+	{
+
+		// New texture is different from current texture
+		if (texture != currentTexture)
+		{
+			// Bind new texture
+			texture.bind();
+
+			// Set texture parameters
+			setTextureParameters(texture);
+
+			// Set current shader program
+			currentTexture = texture;
+
+			//TODO
+			if (profile == true)
+			{
+				profiler.measure(Profiler.BIND_TEXTURE);
+			}
+
+		}
+
+	}
+
+	/**
+	 * Set texture parameters.
+	 * @param texture The texture
+	 */
+	protected abstract void setTextureParameters(
+		final Texture texture);
 
 }

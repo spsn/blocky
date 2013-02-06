@@ -5,37 +5,8 @@ import org.lwjgl.test.opengles.util.Shader;
 /**
  * Represents a shader program.
  */
-public class GLES20Program
+public class GLES20Program extends Program
 {
-	// Identifier
-	private int id;
-
-	// Model view projection matrix uniform location
-	private int mvpMatrixUniform;
-
-	// Model position rotation matrix uniform location
-	private int mprMatrixUniform;
-
-	// Model position uniform location
-	private int modelPositionUniform;
-
-	// Model rotation uniform location
-	private int modelRotationUniform;
-
-	// Vertex position attribute location
-	private int vertexPositionAttribute;
-
-	// Vertex normal attribute location
-	private int vertexNormalAttribute;
-
-	// Vertex color attribute location
-	private int vertexColorAttribute;
-
-	// Vertex texture coordinate attribute location
-	private int vertexTextureAttribute;
-
-	// Fragment texture sampler uniform location
-	private int fragmentSamplerUniform;
 
 	/**
 	 * Constructor.
@@ -57,6 +28,9 @@ public class GLES20Program
 	public GLES20Program(
 		final Shader... shaders)
 	{
+		// Call constructor
+		super();
+
 		// Create program
 		id = GLES20.glCreateProgram();
 
@@ -107,15 +81,6 @@ public class GLES20Program
 
 		// Get fragment texture sampler uniform location
 		fragmentSamplerUniform = getUniformLocationChecked("fTextureSampler");
-	}
-
-	/**
-	 * Get identifier.
-	 * @return The identifier
-	 */
-	public int getId()
-	{
-		return id;
 	}
 
 	/**
@@ -296,87 +261,6 @@ public class GLES20Program
 
 		// Disable shader program
 		GLES20.glUseProgram(0);
-	}
-
-	/**
-	 * Get model view projection matrix uniform location.
-	 * @return The model view projection matrix uniform location
-	 */
-	public int getMvpMatrixUniform()
-	{
-		return mvpMatrixUniform;
-	}
-
-	/**
-	 * Get model position rotation matrix uniform location.
-	 * @return The model position rotation matrix uniform location
-	 */
-	public int getMprMatrixUniform()
-	{
-		return mprMatrixUniform;
-	}
-
-	/**
-	 * Get model position uniform location.
-	 * @return The model position uniform location
-	 */
-	public int getModelPositionUniform()
-	{
-		return modelPositionUniform;
-	}
-
-	/**
-	 * Get model rotation uniform location.
-	 * @return The model rotation uniform location
-	 */
-	public int getModelRotationUniform()
-	{
-		return modelRotationUniform;
-	}
-
-	/**
-	 * Get vertex position attribute location.
-	 * @return The vertex position attribute location
-	 */
-	public int getVertexPositionAttribute()
-	{
-		return vertexPositionAttribute;
-	}
-
-	/**
-	 * Get vertex normal attribute location.
-	 * @return The vertex normal attribute location
-	 */
-	public int getVertexNormalAttribute()
-	{
-		return vertexNormalAttribute;
-	}
-
-	/**
-	 * Get vertex color attribute location.
-	 * @return The vertex color attribute location
-	 */
-	public int getVertexColorAttribute()
-	{
-		return vertexColorAttribute;
-	}
-
-	/**
-	 * Get vertex texture coordinate attribute location.
-	 * @return The vertex texture coordinate attribute location
-	 */
-	public int getVertexTextureAttribute()
-	{
-		return vertexTextureAttribute;
-	}
-
-	/**
-	 * Get fragment texture sampler uniform location.
-	 * @return The fragment texture sampler uniform location
-	 */
-	public int getFragmentSamplerUniform()
-	{
-		return fragmentSamplerUniform;
 	}
 
 	/**

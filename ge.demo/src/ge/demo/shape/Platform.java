@@ -97,7 +97,7 @@ public class Platform extends Shape
 		}
 
 		// Bottom
-		if (bottom == true)
+//		if (bottom == true)
 		{
 			// Top right
 			mesh.addVertex(
@@ -151,13 +151,13 @@ public class Platform extends Shape
 					x2, y2, z1,
 					0.0f, 0.0f, 1.0f,
 					color7, color7, color7, 1.0f,
-					materials[2].getX1(), materials[2].getY2());
+					materials[2].getX1(), materials[2].getY1() + (materials[2].getY2() - materials[2].getY1()) / 4.0f);
 			// Bottom right
 			mesh.addVertex(
 					x1, y2, z1,
 					0.0f, 0.0f, 1.0f,
 					color8, color8, color8, 1.0f,
-					materials[2].getX2(), materials[2].getY2());
+					materials[2].getX2(), materials[2].getY1() + (materials[2].getY2() - materials[2].getY1()) / 4.0f);
 
 			count++;
 		}
@@ -182,13 +182,13 @@ public class Platform extends Shape
 					x1, y2, z2,
 					0, 0, 0,
 					color5, color5, color5, 1.0f,
-					materials[3].getX1(), materials[3].getY2());
+					materials[3].getX1(), materials[3].getY1() + (materials[3].getY2() - materials[3].getY1()) / 4.0f);
 			// Bottom right
 			mesh.addVertex(
 					x2, y2, z2,
 					0, 0, 0,
 					color6, color6, color6, 1.0f,
-					materials[3].getX2(), materials[3].getY2());
+					materials[3].getX2(), materials[3].getY1() + (materials[3].getY2() - materials[3].getY1()) / 4.0f);
 
 			count++;
 		}
@@ -213,13 +213,13 @@ public class Platform extends Shape
 					x2, y2, z2,
 					0, 0, 0,
 					color6, color6, color6, 1.0f,
-					materials[4].getX1(), materials[4].getY2());
+					materials[4].getX1(), materials[4].getY1() + (materials[4].getY2() - materials[4].getY1()) / 4.0f);
 			// Bottom right
 			mesh.addVertex(
 					x2, y2, z1,
 					0, 0, 0,
 					color7, color7, color7, 1.0f,
-					materials[4].getX2(), materials[4].getY2());
+					materials[4].getX2(), materials[4].getY1() + (materials[4].getY2() - materials[4].getY1()) / 4.0f);
 
 			count++;
 		}
@@ -244,13 +244,13 @@ public class Platform extends Shape
 					x1, y2, z1,
 					0, 0, 0,
 					color8, color8, color8, 1.0f,
-					materials[5].getX1(), materials[5].getY2());
+					materials[5].getX1(), materials[5].getY1() + (materials[5].getY2() - materials[5].getY1()) / 4.0f);
 			// Bottom right
 			mesh.addVertex(
 					x1, y2, z2,
 					0, 0, 0,
 					color5, color5, color5, 1.0f,
-					materials[5].getX2(), materials[5].getY2());
+					materials[5].getX2(), materials[5].getY1() + (materials[5].getY2() - materials[5].getY1()) / 4.0f);
 
 			count++;
 		}

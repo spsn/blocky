@@ -3,7 +3,7 @@ package ge.framework.buffer;
 /**
  * Represents a Short buffer.
  */
-public class ShortBuffer
+public class ShortBuffer extends Buffer
 {
 	// Capacity
 	private int capacity;

@@ -7,6 +7,9 @@ import ge.framework.mesh.Mesh;
 public abstract class Actor
 {
 	//TODO
+	private int id;
+
+	//TODO
 	private Mesh mesh;
 
 	//TODO
@@ -24,9 +27,16 @@ public abstract class Actor
 	//TODO
 	protected float duration;
 
-	//TODO
+	/**
+	 * Constructor.
+	 */
 	public Actor()
 	{
+		// Call super constructor
+		super();
+
+		//TODO
+		id = (int) System.currentTimeMillis();      
 	}
 
 	public abstract void draw(Mesh mesh);
@@ -62,6 +72,14 @@ public abstract class Actor
 
 	public void setRotation(Vector3f rotation) {
 		this.rotation = rotation;
+	}
+
+	public int getId() {
+		return id;
+	}
+
+	public void setId(int id) {
+		this.id = id;
 	}
 
 }

@@ -15,6 +15,7 @@ import org.lwjgl.opengles.PixelFormat;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
+import org.newdawn.slick.opengl.Texture;
 
 /**
  * Represents a renderer for OpenGL ES 2.0.
@@ -54,15 +55,8 @@ public class GLES20Renderer extends Renderer
 	// Model view projection matrix buffer
 	private java.nio.FloatBuffer mvpMatrixBuffer;
 
-	// Profiler
-	public Profiler profiler;
-
 	//TODO
 	private int visBatchCount;
-
-	//TODO
-	private int eventSwivel;
-	private boolean eventsReady;
 
 	/**
 	 * Constructor.
@@ -88,9 +82,6 @@ public class GLES20Renderer extends Renderer
 
 		//TODO
 		mvpMatrixBuffer = BufferUtils.createFloatBuffer(16);
-
-		// Create profiler
-		profiler = new Profiler();
 	}
 
 	//TODO
@@ -131,7 +122,7 @@ public class GLES20Renderer extends Renderer
 		Display.setInitialBackground(backgroundColor.getRed(), backgroundColor.getGreen(), backgroundColor.getBlue());
 
 		//TODO
-		Display.setVSyncEnabled(true);
+		Display.setVSyncEnabled(waitForVsync);
 		Display.setFullscreen(true);
 
 		// Create display
@@ -327,13 +318,8 @@ public class GLES20Renderer extends Renderer
 		if (texture != null)
 		{
 			// Bind texture
-			texture.bind();
-			GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
-			GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+			bindTexture(texture);
 		}
-
-		//TODO
-		profiler.measure(Profiler.BIND_TEXTURE);
 
 		//TODO
 		visBatchCount = 0;
@@ -342,10 +328,7 @@ public class GLES20Renderer extends Renderer
 		GLES20.glDisable(GLES20.GL_BLEND);
 
 		// Activate shader program for opaque meshes
-		opaqueProgram.activate();
-
-		//TODO
-		profiler.measure(Profiler.ACTIVATE_PROGRAM);
+		activateProgram(opaqueProgram);
 
 		// Set model view projection matrix in shader program
 		GLES20.glUniformMatrix4(opaqueProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
@@ -362,20 +345,11 @@ public class GLES20Renderer extends Renderer
 			opaqueProgram.getVertexPositionAttribute(), opaqueProgram.getVertexNormalAttribute(),
 			opaqueProgram.getVertexColorAttribute(), opaqueProgram.getVertexTextureAttribute());
 
-		// Deactivate shader program for opaque meshes
-		opaqueProgram.deactivate();
-
-		//TODO
-		profiler.measure(Profiler.DEACTIVATE_PROGRAM);
-
 		// Scene contains model meshes?
 		if (modelMeshList.size() > 0)
 		{
 			// Activate shader program for model meshes
-			modelProgram.activate();
-
-			//TODO
-			profiler.measure(Profiler.ACTIVATE_PROGRAM);
+			activateProgram(modelProgram);
 
 			// Set model view projection matrix in shader program
 			GLES20.glUniformMatrix4(modelProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
@@ -391,27 +365,27 @@ public class GLES20Renderer extends Renderer
 				modelProgram.getModelPositionUniform(), modelProgram.getModelRotationUniform(),
 				modelProgram.getVertexPositionAttribute(), modelProgram.getVertexNormalAttribute(),
 				modelProgram.getVertexColorAttribute(), modelProgram.getVertexTextureAttribute());
-
-			// Deactivate shader program for model meshes
-			modelProgram.deactivate();
-
-			//TODO
-			profiler.measure(Profiler.DEACTIVATE_PROGRAM);
 		}
 
 		// Scene contains transparent meshes?
 		if ((transparentMeshList.size() > 0)
 			|| (overlayMeshList.size() > 0))
 		{
+
+			//TODO - per mesh / per list
+			// Texture defined?
+			if (texture != null)
+			{
+				// Bind texture
+				bindTexture(texture);
+			}
+
 			// Enable alpha blending for transparent meshes
 			GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA); 
 			GLES20.glEnable(GLES20.GL_BLEND);
 
 			// Activate shader program for transparent meshes
-			transparentProgram.activate();
-
-			//TODO
-			profiler.measure(Profiler.ACTIVATE_PROGRAM);
+			activateProgram(transparentProgram);
 
 			// Set model view projection matrix in shader program
 			GLES20.glUniformMatrix4(transparentProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
@@ -448,8 +422,8 @@ public class GLES20Renderer extends Renderer
 				profiler.measure(Profiler.GET_MATRIX);
 
 				// Enable color invert blending for overlay meshes
-//				GL11.glBlendFunc(GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ZERO);
-//				GL11.glEnable(GL11.GL_BLEND);
+//				GLES20.glBlendFunc(GLES20.GL_ONE_MINUS_DST_COLOR, GLES20.GL_ZERO);
+//				GLES20.glEnable(GLES20.GL_BLEND);
 
 				// Set orthogonal projection matrix in shader program
 				GLES20.glUniformMatrix4(transparentProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
@@ -464,34 +438,16 @@ public class GLES20Renderer extends Renderer
 					transparentProgram.getVertexColorAttribute(), transparentProgram.getVertexTextureAttribute());
 			}
 
-			// Deactivate shader program for transparent meshes
-			transparentProgram.deactivate();
-
-			//TODO
-			profiler.measure(Profiler.DEACTIVATE_PROGRAM);
 		}
 
 		//TODO
 		counters.visBatchCount = visBatchCount;
 
 		// Swap buffers
-//		GL11.glFlush();
-//		GL11.glFinish();
+//		GLES20.glFlush();
+//		GLES20.glFinish();
 		Display.update(false);
-
-		//TODO
-		if (eventSwivel == 0)
-		{
-			Display.processMessages();
-			eventsReady = true;
-		}
-		else
-		{
-			eventsReady = false;
-		}
-
-		//TODO
-		eventSwivel = (eventSwivel == 0) ? 0 : eventSwivel + 1;
+		Display.processMessages();
 
 		//TODO
 		profiler.measure(Profiler.SWAP_BUFFERS);
@@ -543,17 +499,12 @@ public class GLES20Renderer extends Renderer
 		profiler.measure(Profiler.GET_MATRIX);
 
 		//TODO - per mesh / per list
-		// Bind texture
+		// Texture defined?
 		if (texture != null)
 		{
-			texture.bind();
+			// Bind texture
+			bindTexture(texture);
 		}
-
-		GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
-		GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-
-		//TODO
-		profiler.measure(Profiler.BIND_TEXTURE);
 
 		//TODO
 		visBatchCount = 0;
@@ -562,14 +513,11 @@ public class GLES20Renderer extends Renderer
 		GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA); 
 		GLES20.glEnable(GLES20.GL_BLEND);
 		// Enable color invert blending for overlay meshes
-//		GL11.glBlendFunc(GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ZERO);
-//		GL11.glEnable(GL11.GL_BLEND);
+//		GLES20.glBlendFunc(GLES20.GL_ONE_MINUS_DST_COLOR, GLES20.GL_ZERO);
+//		GLES20.glEnable(GLES20.GL_BLEND);
 
 		// Activate shader program for transparent meshes
-		transparentProgram.activate();
-
-		//TODO
-		profiler.measure(Profiler.ACTIVATE_PROGRAM);
+		activateProgram(transparentProgram);
 
 		// Set orthogonal projection matrix in shader program
 		GLES20.glUniformMatrix4(transparentProgram.getMvpMatrixUniform(), false, mvpMatrixBuffer);
@@ -586,20 +534,14 @@ public class GLES20Renderer extends Renderer
 			transparentProgram.getVertexPositionAttribute(), transparentProgram.getVertexNormalAttribute(),
 			transparentProgram.getVertexColorAttribute(), transparentProgram.getVertexTextureAttribute());
 
-		// Deactivate shader program for transparent meshes
-		transparentProgram.deactivate();
-
-		//TODO
-		profiler.measure(Profiler.DEACTIVATE_PROGRAM);
-
 		//TODO
 		counters.visBatchCount = visBatchCount;
 
 		// Swap buffers
-//		GL11.glFlush();
-//		GL11.glFinish();
+//		GLES20.glFlush();
+//		GLES20.glFinish();
 		Display.update(false);
-//		Display.processMessages();
+		Display.processMessages();
 
 		//TODO
 		profiler.measure(Profiler.SWAP_BUFFERS);
@@ -680,12 +622,7 @@ public class GLES20Renderer extends Renderer
 				if (mesh.getTexture() != null)
 				{
 					// Bind texture
-					mesh.getTexture().bind();
-					GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
-					GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-
-					//TODO
-//					profiler.measure(Profiler.BIND_TEXTURE);
+					bindTexture(mesh.getTexture(), false);
 				}
 
 				//TODO - model position
@@ -752,14 +689,14 @@ public class GLES20Renderer extends Renderer
 					//TODO
 					for (int i = 0; i < indexOffsets.length; i++)
 					{
-						// Draw mesh
+						// Render mesh
 						GLES20.glDrawElements(GLES20.GL_TRIANGLES, mesh.getIndexCount(), GLES20.GL_UNSIGNED_SHORT, indexOffsets[i]);
 					}
 
 				}
 				else
 				{
-					// Draw mesh
+					// Render mesh
 					GLES20.glDrawElements(GLES20.GL_TRIANGLES, mesh.getIndexCount(), GLES20.GL_UNSIGNED_SHORT, mesh.getIndexOffset());
 				}
 
@@ -774,6 +711,23 @@ public class GLES20Renderer extends Renderer
 
 		//TODO
 		profiler.measure(Profiler.DRAW_ELEMENTS);
+	}
+
+	/**
+	 * Set texture parameters.
+	 * @param texture The texture
+	 */
+	protected void setTextureParameters(
+		final Texture texture)
+	{
+		GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+		GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+//		GLES20.glTexEnvf(GLES20.GL_TEXTURE_ENV, GLES20.GL_TEXTURE_ENV_MODE, GLES20.GL_REPLACE);
+//		GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+//		GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+//		GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GL14.GL_GENERATE_MIPMAP, GLES20.GL_TRUE);
+//		GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST_MIPMAP_NEAREST);
+//		GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST_MIPMAP_NEAREST);
 	}
 
 	//TODO
@@ -798,12 +752,6 @@ public class GLES20Renderer extends Renderer
 		//TODO - picking
 
 		return new Ray(rayPosition, rayDirection);
-	}
-
-	//TODO
-	public boolean eventsReady()
-	{
-		return eventsReady;
 	}
 
 }
